@@ -1,0 +1,410 @@
+---
+title: "ISC Report"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+#### Packages
+library(DBI)
+library(RPostgres)
+library(readxl)
+library(ggplot2)
+library(plotly)
+library(dplyr)
+library(stringr)
+library(DT)
+library(forcats)
+library(tidyr)
+library(dygraphs)
+library(xts)
+library(apexcharter)
+library(base)
+
+load("~/ISC/service1.RData")
+
+#################### Edit data
+service1$icd10_sa <- str_replace_all(service1$service_icd_main_disease_diagnosis, ";", " ") %>%
+  str_replace_all("[[:punct:]]", "")
+
+service1$icd10_af1 <- str_extract(service1$icd10_sa,"(\\w+)")
+service1$icd10_af1 <- substr(service1$icd10_af1, 1, 3)
+
+service1$icd10_sa2 <- substring(service1$icd10_sa, first = 5)
+service1$icd10_sa2 <- str_trim(service1$icd10_sa2)
+
+service1$icd10_af2 <- str_extract(service1$icd10_sa2,"(\\w+)")
+service1$icd10_af2 <- substr(service1$icd10_af2, 1, 3)
+
+service1$icd10_sa3 <- substring(service1$icd10_sa2, first = 5)
+service1$icd10_sa3 <- str_trim(service1$icd10_sa3)
+
+service1$icd10_af3 <- str_extract(service1$icd10_sa3,"(\\w+)")
+service1$icd10_af3 <- substr(service1$icd10_af3, 1, 3)
+
+service1$icd10_sa4 <- substring(service1$icd10_sa3, first = 5)
+service1$icd10_sa4 <- str_trim(service1$icd10_sa4)
+
+service1$icd10_af4 <- str_extract(service1$icd10_sa4,"(\\w+)")
+service1$icd10_af4 <- substr(service1$icd10_af4, 1, 3)
+
+service1$icd10_sa5 <- substring(service1$icd10_sa4, first = 5)
+service1$icd10_sa5 <- str_trim(service1$icd10_sa5)
+
+service1$icd10_af5 <- str_extract(service1$icd10_sa5,"(\\w+)")
+service1$icd10_af5 <- substr(service1$icd10_af5, 1, 3)
+
+service1$icd10_sa6 <- substring(service1$icd10_sa5, first = 5)
+service1$icd10_sa6 <- str_trim(service1$icd10_sa6)
+
+service1$icd10_af6 <- str_extract(service1$icd10_sa6,"(\\w+)")
+service1$icd10_af6 <- substr(service1$icd10_af6, 1, 3)
+
+service1$icd10_sa7 <- substring(service1$icd10_sa6, first = 5)
+service1$icd10_sa7 <- str_trim(service1$icd10_sa7)
+
+service1$icd10_af7 <- str_extract(service1$icd10_sa7,"(\\w+)")
+service1$icd10_af7 <- substr(service1$icd10_af7, 1, 3)
+
+service1$icd10_sa8 <- substring(service1$icd10_sa7, first = 5)
+service1$icd10_sa8 <- str_trim(service1$icd10_sa8)
+
+service1$icd10_af8 <- str_extract(service1$icd10_sa8,"(\\w+)")
+service1$icd10_af8 <- substr(service1$icd10_af8, 1, 3)
+
+##### Xử lý dữ liệu dành cho phân tích
+
+dta <- service1 %>%
+  mutate(date = as.Date(service_hospitalization_start, "%Y-%m-%d"),
+         weekday = weekdays(date),
+         month = format.Date(date, "%Y-%m"),
+         dup1 = duplicated(service_patient_history_id)) %>%
+  filter(dup1 == FALSE)
+
+dta$weekday[dta$weekday == "Monday"] <- "1. Monday"
+dta$weekday[dta$weekday == "Tuesday"] <- "2. Tuesday"
+dta$weekday[dta$weekday == "Wednesday"] <- "3. Wednesday"
+dta$weekday[dta$weekday == "Thursday"] <- "4. Thursday"
+dta$weekday[dta$weekday == "Friday"] <- "5. Friday"
+dta$weekday[dta$weekday == "Saturday"] <- "6. Saturday"
+dta$weekday[dta$weekday == "Sunday"] <- "7. Sunday"
+
+
+dta2 <- dta %>%
+  mutate(dup2 = duplicated(service_patient_identifier)) %>%
+  filter(dup2 == FALSE)
+```
+
+
+##### Phân tích xu hướng của số lượt tiếp đón và số lượng bệnh nhân theo ngày
+```{r, echo=FALSE}
+dta_countdate1 <- dta %>%
+  mutate(count = 1) %>%
+  group_by(date) %>%
+  summarise(counts = sum(count))
+
+dta_countdate2 <- dta2 %>%
+  mutate(count = 1) %>%
+  group_by(date) %>%
+  summarise(counts2 = sum(count))
+
+dta_countdate <- full_join(dta_countdate1, dta_countdate2, by = "date") %>%
+  mutate(dates = as.character(date))
+
+apex(dta_countdate, type = "spline", aes(dates, counts), serie_name = "Số lượt tiếp đón") %>%
+  add_line(aes(dates, counts2), type = "spline", serie_name = "Số lượng bệnh nhân") %>%
+  ax_colors(c("#08519c", "#E91E63")) %>%
+  ax_labs("Biểu đồ phân tích xu hướng số lượt tiếp đón và số lượng bệnh nhân theo ngày")
+```
+<p style="font-size:110%;text-align:justify;">-  Dữ liệu thống kế số lượt tiếp đón và số lượng bệnh nhân theo ngày với các quy luật được thể hiện theo xu hướng sau: <p>
+<ul>
+  <li style="font-size:110%;text-align:justify;"> + Xu hướng biến động theo chi kỳ năm: các năm 2018 và 2019 do chưa có vấn đề về dịch bệnh nên các số liệu phản ảnh tương đối cao và đều trong một năm; nhưng sang tới năm 2020 và 2021 do ảnh hưởng mạnh của dịch bệnh COVID đã làm theo đổi quy luật theo năm với các điểm tụt giảm rất mạnh vào các thời điểm bùng dịch như tháng 04/2020, 08/2020 và tháng 05/2021 đến nay.</li>
+  <li style="font-size:110%;text-align:justify;">+ Xu hướng biến động theo các mùa trong năm như cao điểm số lượt tiếp đón và số lượng bệnh nhân sẽ tập trung vào tháng 07 - 08 các năm và thấp nhất vào đợt nghĩ lễ cuối năm tháng 02.</li>
+  <li style="font-size:110%;text-align:justify;">+ Xu hướng thể hiện quy luật theo tuần với các ngày cuối tuần sẽ giảm mạnh về số lượt, nhất là với ĐHY sẽ không tổ chức khám vào CN và chiều ngày thứ 7. Ngày trong tuần thì số lượt và số lượng bệnh nhân sẽ đạt cao điểm vào ngày thứ ba.</li>
+<ul>
+
+
+##### Phân tích xu hướng của số lượt tiếp đón và số lượng bệnh nhân theo thứ trong tuần
+```{r, echo=FALSE}
+dta_countweek1 <- dta %>%
+  mutate(count = 1) %>%
+  group_by(weekday) %>%
+  summarise(counts = sum(count)) %>%
+  arrange(weekday)
+
+dta_countweek2 <- dta2 %>%
+  mutate(count = 1) %>%
+  group_by(weekday) %>%
+  summarise(counts2 = sum(count)) %>%
+  arrange(weekday)
+
+dta_countweek <- full_join(dta_countweek1, dta_countweek2, by = "weekday")
+
+apex(dta_countweek, type = "spline", aes(weekday, counts), serie_name = "Số lượt tiếp đón") %>%
+  add_line(aes(weekday, counts2), type = "spline", serie_name = "Số lượng bệnh nhân") %>%
+  ax_colors(c("#08519c", "#E91E63")) %>%
+  ax_markers(size = 4) %>%
+  ax_labs("Biểu đồ phân tích xu hướng số lượt tiếp đón và số lượng bệnh nhân theo thứ trong tuần")
+```
+
+<p style="font-size:110%;text-align:justify;">- Nếu phân tích sâu hơn theo quy luật các ngày trong tuần thì xu hướng biến đổi sẽ rõ ràng hơn: <p>
+<ul>
+  <li style="font-size:110%;text-align:justify;">+ Số lượt tiếp đón và số lượng bệnh nhân sẽ có xu hướng phân đều vào các ngày trong tuần từ thứ 2 đến thứ 6, với thứ 3 đạt đỉnh cao nhất.</li>
+	<li style="font-size:110%;text-align:justify;">+ Xu hướng chung sẽ giảm dần vào các ngày cuối tuần với thứ 7 thời gian tiếp đón và khám chữa bệnh chỉ áp dụng nửa ngày nên số lượt bệnh nhân gần như tụt giảm gần 40%, ngày Chủ nhật chỉ tiếp đón bệnh nhân cấp cứu nên số lượng bệnh nhân không đáng kể.</li>
+	<li style="font-size:110%;text-align:justify;">+ Một gợi ý từ xu hướng số liệu của ngày thứ 7: số lượng bệnh nhân có nhu cầu khám chữa bệnh vào cuối tuần là tương đối cao, nhất là các đối tượng hành chính văn phòng thì khoảng thời gian cuối tuần sẽ vẫn có nhu khám chữa bệnh với các bệnh lý thông thường hơặc khám sức khỏe.</li>
+<ul>
+
+
+##### Phân tích xu hướng của số lượt tiếp đón và số lượng bệnh nhân theo tháng
+```{r, echo=FALSE}
+
+dta_countmonth1 <- dta %>%
+  mutate(count = 1) %>%
+  group_by(month) %>%
+  summarise(counts = sum(count))
+
+dta_countmonth2 <- dta2 %>%
+  mutate(count = 1) %>%
+  group_by(month) %>%
+  summarise(counts2 = sum(count))
+
+dta_countmonth <- full_join(dta_countmonth1, dta_countmonth2, by = "month")
+
+apex(dta_countmonth, type = "spline", aes(month, counts), serie_name = "Số lượt tiếp đón") %>%
+  add_line(aes(month, counts2), type = "spline", serie_name = "Số lượng bệnh nhân") %>%
+  ax_colors(c("#08519c", "#E91E63")) %>%
+  ax_markers(size = 4) %>%
+  ax_labs("Biểu đồ phân tích xu hướng số lượt tiếp đón và số lượng bệnh nhân theo tháng")
+```
+
+<p style="font-size:110%;text-align:justify;">- Số liệu sau khi tổng hợp lên các tháng trong năm, thì xu hướng thể hiện càng rõ nét hơn với:<p>
+<ul>
+  <li style="font-size:110%;text-align:justify;">+ Quy luật theo năm và theo mùa vẫn rõ ràng và chuẩn xác, trong năm thì số lượt tiếp đón và số lượng bệnh nhân sẽ tập trung vào khoảng giữa năm với các tháng từ 05 - 10.</li>
+  <li style="font-size:110%;text-align:justify;">+ Mức độ tập trung cao nhất của xu hướng vẫn là tháng 07 - 08.</li>
+  <li style="font-size:110%;text-align:justify;">+ Theo xu hướng tổng thể thì số lượt bệnh nhân và số lượt tiếp đón đang bị ảnh hưởng rất mạnh từ các đợt bùng phát dịch bệnh COVID.</li>
+  <li style="font-size:110%;text-align:justify;">+ Nhu cầu khám chữa bệnh trên thực tế không hề giảm, được chính minh bằng các số liệu sau giãn cách, các tháng sau đó số lượng bệnh nhân tăng mạnh. Điều này cho thấy với ảnh hưởng của dịch bệnh cũng là cơ hội cho các giải pháp phần mềm khám chữa bệnh và chăm sóc sức khỏe trực tuyến có thể khai thác vào giai đoạn này, đây được coi là xu hướng chung cho giai đoạn tới kể cả trong ngắn hạn và dài hạn.</li>
+<ul>
+
+
+##### Phân tích số lượt đến khám theo từng bệnh nhân
+```{r, echo=FALSE}
+dta3 <- dta %>%
+  mutate(count = 1) %>%
+  group_by(service_patient_identifier) %>%
+  summarise(counts = sum(count))
+
+dta3_s1 <- dta3 %>%
+  mutate(count2 = 1) %>%
+  group_by(counts) %>%
+  summarise(counts2 = sum(count2))
+
+datatable(dta3_s1)
+
+dta3_s2 <- dta3_s1 %>%
+  filter(counts > 1)
+
+apex(dta3_s1, type = "column", aes(counts, counts2), serie_name = "Số lượng bệnh nhân") %>%
+  ax_labs("Biểu đồ phân tích số lượt đến viện theo từng bệnh nhân")
+
+apex(dta3_s2, type = "column", aes(counts, counts2), serie_name = "Số lượng bệnh nhân") %>%
+  ax_labs("Biểu đồ phân tích số lượt đến viện theo từng bệnh nhân (Chỉ tính từ 2 lượt trở lên)")
+```
+
+
+<p style="font-size:110%;text-align:justify;">- Sau khi tổng hợp dữ liệu theo mã người bệnh được ghi nhận trên hệ thống ta có biểu đồ phân tích số lượt đã thăm khám của bệnh nhân:<p>
+<ul>
+  <li style="font-size:110%;text-align:justify;">+ Thống kê chung cho thấy đa phần bệnh nhân thường là ngoại trú và thường chỉ thăm khám một lượt, tỷ lệ tái khám chưa cao.</li>
+  <li style="font-size:110%;text-align:justify;">+ Tuy nhiên xét về tổng thể số lượng người bệnh tới khám từ lần thứ 2 trở đi vẫn đạt mức cao với số lượt đạt xấp xỉ 200.000 lượt.</li>
+  <li style="font-size:110%;text-align:justify;">+ Trong đó tới khám lần thứ 2 cũng đạt tỷ lệ khá cao với 133.000 lượt.</li>
+<ul>
+
+
+##### Phân tích số lượt tiếp đón theo BHYT/Dịch vụ và theo ngày
+```{r, echo=FALSE}
+dta_type1 <- dta %>%
+  mutate(count = 1) %>%
+  group_by(date, service_patient_type) %>%
+  summarise(counts = sum(count))
+
+apex(dta_type1, type = "spline", aes(date, counts, fill = service_patient_type)) %>%
+  ax_labs("Biểu đồ phân tích số lượt tiếp đón theo bệnh nhân BHYT và Dịch vụ - Theo ngày")
+```
+
+
+##### Phân tích số lượt tiếp đón theo BHYT/Dịch vụ và theo ngày
+```{r, echo=FALSE}
+dta_type1 <- dta %>%
+  mutate(count = 1) %>%
+  group_by(date, service_patient_type) %>%
+  summarise(counts = sum(count))
+
+apex(dta_type1, type = "spline", aes(date, counts, fill = service_patient_type)) %>%
+  ax_labs("Biểu đồ phân tích số lượt tiếp đón theo bệnh nhân BHYT và Dịch vụ - Theo ngày")
+
+dta2_type1 <- dta2 %>%
+  mutate(count = 1) %>%
+  group_by(date, service_patient_type) %>%
+  summarise(counts = sum(count))
+
+apex(dta2_type1, type = "spline", aes(date, counts, fill = service_patient_type)) %>%
+  ax_labs("Biểu đồ phân tích số lượng bệnh nhân theo bệnh nhân BHYT và Dịch vụ - Theo ngày")
+```
+
+
+
+##### Phân tích số lượt tiếp đón theo BHYT/Dịch vụ và theo tháng
+```{r, echo=FALSE}
+dta_type2 <- dta %>%
+  mutate(count = 1) %>%
+  group_by(month, service_patient_type) %>%
+  summarise(counts = sum(count))
+
+apex(dta_type2, type = "spline", aes(month, counts, fill = service_patient_type)) %>%
+  ax_colors(c("#08519c", "#E91E63")) %>%
+  ax_markers(size = 4) %>%
+  ax_labs("Biểu đồ phân tích số lượt tiếp đón theo bệnh nhân BHYT và Dịch vụ - Theo tháng")
+
+dta2_type2 <- dta2 %>%
+  mutate(count = 1) %>%
+  group_by(month, service_patient_type) %>%
+  summarise(counts = sum(count))
+
+apex(dta2_type2, type = "spline", aes(month, counts, fill = service_patient_type)) %>%
+  ax_colors(c("#08519c", "#E91E63")) %>%
+  ax_markers(size = 4) %>%
+  ax_labs("Biểu đồ phân tích số lượng bệnh nhân theo bệnh nhân BHYT và Dịch vụ - Theo tháng")
+```
+
+
+##### Phân tích số lượt tiếp đón theo giới tính và theo tháng
+```{r, echo=FALSE}
+dta_gender <- dta %>%
+  mutate(count = 1) %>%
+  group_by(month, service_gender) %>%
+  summarise(counts = sum(count))
+
+apex(dta_gender, type = "spline", aes(month, counts, fill = service_gender)) %>%
+  ax_colors(c("#08519c", "#E91E63")) %>%
+  ax_markers(size = 4) %>%
+  ax_labs("Biểu đồ phân tích số lượt tiếp đón theo giới tính - Theo tháng")
+
+dta2_gender <- dta2 %>%
+  mutate(count = 1) %>%
+  group_by(month, service_gender) %>%
+  summarise(counts = sum(count))
+
+apex(dta2_gender, type = "spline", aes(month, counts, fill = service_gender)) %>%
+  ax_colors(c("#08519c", "#E91E63")) %>%
+  ax_markers(size = 4) %>%
+  ax_labs("Biểu đồ phân tích số lượng bệnh nhân theo giới tính - Theo tháng")
+```
+
+
+##### Phân tích số lượt tiếp đón theo quốc tịch
+```{r, echo=FALSE}
+dta_country <- dta %>%
+  mutate(count = 1) %>%
+  group_by(service_country) %>%
+  summarise(counts = sum(count)) %>%
+  arrange(desc(counts))
+
+apex(dta_country, type = "column", aes(service_country, counts), serie_name = "Số lượt tiếp đón")
+```
+
+
+##### Phân tích số lượt tiếp đón theo quốc tịch (Đã tách Việt Nam)
+```{r, echo=FALSE}
+dta_contry <- dta %>%
+  mutate(count = 1) %>%
+  group_by(service_country) %>%
+  summarise(counts = sum(count)) %>%
+  arrange(desc(counts))
+
+apex(dta_contry, type = "column", aes(service_country, counts), serie_name = "Số lượt tiếp đón") %>%
+  ax_labs("Biểu đồ phân tích số lượt tiếp đón theo quốc tịch của bệnh nhân")
+
+dta_contry2 <- dta_contry %>%
+  filter(service_country != "Việt Nam")
+
+apex(dta_contry2, type = "column", aes(service_country, counts), serie_name = "Số lượt tiếp đón") %>%
+  ax_labs("Biểu đồ phân tích số lượt tiếp đón theo quốc tịch của bệnh nhân (Nhóm bệnh nhân nước ngoài)")
+```
+
+
+##### Phân tích số lượt tiếp đón theo tỉnh
+```{r, echo=FALSE}
+dta_province <- dta %>%
+  mutate(count = 1) %>%
+  group_by(service_province) %>%
+  summarise(counts = sum(count)) %>%
+  arrange(desc(counts))
+
+apex(dta_province, type = "column", aes(service_province, counts), serie_name = "Số lượt tiếp đón") %>%
+  ax_labs("Biểu đồ phân tích số lượt tiếp đón theo tỉnh/thành phố")
+
+
+dta_province2 <- dta_province %>%
+  filter(service_province != "Hà Nội")
+
+apex(dta_province2, type = "column", aes(service_province, counts), serie_name = "Số lượt tiếp đón") %>%
+  ax_labs("Biểu đồ phân tích số lượt tiếp đón theo tỉnh/thành phố (Không tính TP Hà Nội)")
+```
+
+
+##### Biểu đồ phân tích số lượt tiếp đón theo quận/huyện trực thuộc thành phố Hà Nội
+```{r, echo=FALSE}
+dta_province3 <- dta %>%
+  mutate(count = 1) %>%
+  filter(service_province == "Hà Nội",
+         !is.na(service_district),
+         service_district != "Cẩm Thủy",
+         service_district != "Kim Sơn",
+         service_district != "Thành phố Thanh Hóa") %>%
+  group_by(service_district) %>%
+  summarise(counts = sum(count)) %>%
+  arrange(desc(counts))
+
+apex(dta_province3, type = "column", aes(service_district, counts), serie_name = "Số lượt tiếp đón") %>%
+  ax_labs("Biểu đồ phân tích số lượt tiếp đón theo quận/huyện trực thuộc thành phố Hà Nội")
+```
+
+
+##### Phân tích số lượt tiếp đón theo khoa chỉ định
+```{r, echo=FALSE}
+dta_department1 <- dta %>%
+  mutate(count = 1) %>%
+  group_by(service_department_appointed) %>%
+  summarise(counts = sum(count)) %>%
+  arrange(desc(counts))
+
+apex(dta_department1, type = "column", aes(service_department_appointed, counts), serie_name = "Số lượt tiếp đón") %>%
+  ax_labs("Biểu đồ phân tích số lượt tiếp đón theo khoa chỉ định")
+```
+
+
+##### Phân tích số lượt tiếp đón theo khoa thực hiện
+```{r, echo=FALSE}
+dta_department2 <- dta %>%
+  mutate(count = 1) %>%
+  group_by(service_department_examines) %>%
+  summarise(counts = sum(count)) %>%
+  arrange(desc(counts))
+
+apex(dta_department2, type = "column", aes(service_department_examines, counts), serie_name = "Số lượt tiếp đón") %>%
+  ax_labs("Biểu đồ phân tích số lượt tiếp đón theo khoa thực hiện")
+```
+
+
+##### Phân tích số lượt tiếp đón theo trình độ chuyên môn
+```{r, echo=FALSE}
+dta_degree <- dta %>%
+  mutate(count = 1) %>%
+  group_by(service_degree) %>%
+  summarise(counts = sum(count)) %>%
+  arrange(desc(counts))
+dta_degree$service_degree[dta_degree$service_degree == "Bác sỹ.TS.PGS"] <- "PGS.TS."
+
+apex(dta_degree, type = "bar", aes(service_degree, counts), serie_name = "Số lượt tiếp đón") %>%
+  ax_labs("Biểu đồ phân tích số lượt tiếp đón theo trình độ chuyên môn của người thực hiện dịch vụ")
+```
+
+

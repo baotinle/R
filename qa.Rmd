@@ -1,0 +1,326 @@
+---
+title: "Báo cáo QA tháng 11"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE,
+  message = FALSE,
+  warning = FALSE
+)
+```
+
+
+```{r}
+library(DBI)
+library(RPostgres)
+library(readxl)
+library(ggplot2)
+library(plotly)
+library(dplyr)
+library(stringr)
+library(DT)
+library(forcats)
+library(tidyr)
+library(dygraphs)
+library(xts)
+library(apexcharter)
+library(base)
+library(lubridate)
+library(correlationfunnel)
+library(tidyquant)
+library(tidyverse)
+library(shiny)
+library(hrbrthemes)
+library(scales)
+load("~/patient/qa.RData")
+load("~/patient/qa_logtime.Rdata")
+load("~/patient/qa_epic.Rdata")
+qa$date <- as.Date(qa$`Work date`, "%Y-%m-%d")
+qa$month <- format.Date(qa$date, "%Y-%m")
+```
+
+#### **1. Phân tích số  người và man-day (Dự án:ISC_ISOFHCARE)**
+```{r}
+qa4 <- qa %>%
+  select(date,`Project Name`,`Full name`,Hours)
+
+qa41 <- qa4 %>%
+  filter(`Project Name` == "ISC_ISOFHCARE")%>%
+  group_by(date,`Project Name`)%>%
+  summarise(counts = n_distinct(`Full name`))
+
+qa42 <- qa4 %>%
+  filter(`Project Name` == "ISC_ISOFHCARE")%>%
+  group_by(date,`Project Name`)%>%
+  summarise(counts = round((sum(Hours)/8.5),1))%>%
+  arrange(desc(date))
+
+qa412 <- full_join(qa41,qa42,by = "date")
+
+qa412 <- qa412 %>%
+  select(date,`Project Name.x`,counts.x,counts.y)
+
+qa412$date <- as.character(qa412$date)
+
+colnames(qa412) <- c("ngay","du_an","so_nguoi","man_day")
+
+ap1 <- apex(data = qa412, type = "column", aes(ngay, so_nguoi)) %>%
+  add_line(aes(ngay, man_day)) %>%
+  ax_colors(c("#f09595", "#5098da")) %>%
+  ax_stroke(curve = "smooth", width = 3) %>%
+  ax_yaxis(
+    decimalsInFloat = 0,
+    title = list(text = "Số người tham gia"),
+    labels = list(
+      formatter = format_num("~s"),
+      minWidth = 40)) %>% 
+  ax_yaxis2(
+    opposite = TRUE,
+    decimalsInFloat = 2,
+    title = list(text = "man-day")) %>%
+  ax_labs(
+    title = "Biểu đồ thể hiện tổng số người và tổng man-day theo từng ngày",
+    subtitle = "Dự án:ISC_ISOFHCARE") %>% 
+  ax_title(
+    style = list(fontSize = "20px")) %>% 
+  ax_subtitle(
+    style = list(fontSize = "12px", color = "#000000")) 
+ap1
+```
+
+#### **2. Số người tham gia trên mỗi dự án**
+```{r}
+qa1 <- qa %>%
+  select(`Project Name`,`Full name`)
+qa11 <- qa1 %>%
+  group_by(`Project Name`) %>%
+  summarise(counts = n_distinct(`Full name`))%>%
+  arrange(desc(counts))
+
+plot1 <- apexchart() %>% 
+  ax_chart(type = "bar") %>% 
+  ax_plotOptions(bar = bar_opts(
+    dataLabels = FALSE
+  )
+  ) %>% 
+  ax_grid(
+    show = TRUE,
+    position = "front",
+    borderColor = "#FFF"
+  ) %>% 
+  ax_series(list(
+    name = "Tổng số người",
+    data = qa11$counts
+  )) %>% 
+  ax_colors("#f09595") %>% 
+  ax_xaxis(categories = unique(qa11$`Project Name`)) %>% 
+  ax_title(text = "Số người tham gia trên mỗi dự án") 
+plot1
+```
+<p style="font-size:110%;text-align:justify;"> Tổng dự án <p>
+
+```{r}
+n_distinct(qa$`Project Name`)
+```
+
+#### **3. Số man-day trên mỗi dự án**
+```{r}
+qa2 <- qa %>%
+  group_by(`Project Name`)%>%
+  summarise(total_hours = round(sum(Hours)/8.5),1)%>%
+  select(`Project Name`,total_hours)%>%
+  arrange(desc(total_hours)) 
+plot2 <- apexchart() %>% 
+  ax_chart(type = "bar") %>% 
+  ax_plotOptions(bar = bar_opts(
+    dataLabels = FALSE
+  )
+  ) %>% 
+  ax_grid(
+    show = TRUE,
+    position = "front",
+    borderColor = "#FFF"
+  ) %>% 
+  ax_series(list(
+    name = "tổng số giờ",
+    data = qa2$total_hours
+  )) %>% 
+  ax_colors("#f09595") %>% 
+  ax_xaxis(categories = unique(qa2$`Project Name`)) %>% 
+  ax_title(text = "Tổng số man-day trên mỗi dự án") 
+plot2
+```
+
+
+#### **5. Số lượng Epic/feature**
+```{r}
+qa10 <- qa_epic %>%
+  filter(qa_epic$`tình trạng`==1)
+
+qa101 <- qa10 %>%
+  mutate(count= 1)%>%
+  group_by(`Dự án`)%>%
+  summarise(counts=sum(count))
+
+qa102 <- qa_epic %>%
+  mutate(count=1)%>%
+  group_by(`Dự án`)%>%
+  summarise(counts2 = sum(count))
+
+qa103 <- full_join(qa101,qa102,by ="Dự án")%>%
+  arrange(desc(counts2))
+
+plot10 <- plot_ly(qa103, x = qa103$`Dự án`, y = qa103$counts2, type = 'bar', name = 'Dự tính',
+                  marker = list(color = 'rgb(55, 83, 109)'))%>% 
+  layout(xaxis = list(categoryorder = "total descending"))
+plot10 <- plot10 %>% add_trace(y = qa103$counts, name = 'Đã xong',marker = list(color = 'rgb(26, 118, 255)'))
+plot10 <- plot10 %>% layout(yaxis = list(title = 'Count'), barmode = 'group')
+plot10
+```
+
+#### **6. Tỷ lệ hoàn thành**
+```{r}
+qa104 <- qa103 %>%
+  mutate(percent = round((qa103$counts/counts2)*100,1))%>%
+  select(`Dự án`,percent)%>%
+  arrange(desc(percent))
+apex(qa104,aes(qa104$`Dự án`,percent))
+```
+
+
+
+#### **7. Số lượng Ticket**
+```{r}
+qa5 <- qa %>%
+  mutate(count = 1)%>%
+  group_by(`Issue Type`)%>%
+  summarise(counts=sum(count))%>%
+  select(`Issue Type`,counts)%>%
+  arrange(desc(counts))
+
+plot5 <- apex(qa5, aes(qa5$`Issue Type`,qa5$counts),serie_name = "Số ticket")%>%
+  ax_colors(c("#f09595", "#5098da")) %>%
+  ax_yaxis(
+    decimalsInFloat = 0,
+    title = list(text = "Số lượng ticket"),
+    labels = list(
+      minWidth = 40)) %>% 
+  ax_labs(
+    title = "Biểu đồ thể hiện số lượng ticket theo từng nhóm vẫn đề") %>% 
+  ax_title(
+    style = list(fontSize = "20px")) %>% 
+  ax_subtitle(
+    style = list(fontSize = "12px", color = "#000000"))
+plot5
+```
+#### **8. Hiệu quả và Không hiệu quả**
+```{r}
+qa6<- qa %>%
+  filter(qa$`Issue Type` == "Bug" | qa$`Issue Type`=="Hot fix")%>%
+  group_by(`Issue Type`)%>%
+  summarise(counts=sum(Hours))%>%
+  arrange(-desc(counts))
+
+total_hours <- sum(qa$Hours)
+
+name <- c("Inefficient Time","Efficient Time")
+value <- c(sum(qa6$counts),total_hours - sum(qa6$counts))
+
+
+time <- data.frame(name,value)
+
+plot6 <- apex(time, type = "pie",mapping=aes(x=name,y=value))%>%
+  ax_colors(c("#f09595", "#5098da"))%>% 
+  ax_labs(
+    title = "Eficient Time and Inefficient Time")
+plot6
+```
+
+
+#### **9. Efforts**
+```{r}
+qa7 <- qa %>%
+  group_by(`Issue Type`)%>%
+  summarise(counts=sum(Hours))%>%
+  arrange(desc(counts))
+
+plot7 <- apex(qa7, type = "pie",mapping=aes(x=qa7$`Issue Type`,y=qa7$counts))%>%
+  ax_labs(
+    title = "Effort")
+plot7
+```
+
+
+#### **10. Bảng Timelog và Manday**
+```{r}
+qa8 <- qa %>%
+  group_by(Username,`Project Name`)%>%
+  select(`Project Name`,Username,Hours)%>%
+  summarise(Timelog = round(sum(Hours),1))
+
+qa8 <- qa8 %>%
+  mutate(Manday = round((Timelog/8.5),1))%>%
+  select(`Project Name`,Username,Timelog,Manday)
+
+qa_logtime1 <- qa_logtime %>%
+  select("Họ và tên","Vị trí",user)
+
+colnames(qa_logtime) <- c("Full name","Position")
+
+qa_logtime2 <- full_join(qa_logtime1,qa8,by=c("user"="Username"))
+
+datatable(    
+  head(qa_logtime2,
+       n=nrow(qa_logtime2),
+       width="auto",),
+  colnames = c("STT","Họ và tên","Vị trí","UserId","Project name","Timelog","Manday"),
+  filter = 'top')
+```
+
+
+#### **11. Manday theo từng vị trí**
+```{r}
+qa_logtime2 <- qa_logtime2 %>%
+  filter(!is.na(qa_logtime2$`Project Name`))
+
+qa9 <- qa_logtime2 %>%
+  group_by(`Vị trí`)%>%
+  summarise(Manday = sum(Manday))%>%
+  arrange(desc(Manday))
+
+plot9 <- apex(qa9,aes(qa9$`Vị trí`,qa9$Manday),serie_name = "Số manday")%>%
+  ax_colors(c("#f09595")) %>%
+  ax_yaxis(
+    decimalsInFloat = 0,
+    title = list(text = "Số lượng manday"),
+    labels = list(
+      minWidth = 40)) %>% 
+  ax_labs(
+    title = "Manday theo từng vị trí") %>% 
+  ax_title(
+    style = list(fontSize = "20px")) %>% 
+  ax_subtitle(
+    style = list(fontSize = "12px", color = "#000000"))
+plot9
+```
+#### **12. Efforts**
+```{r}
+plot91 <- plot_ly(qa9, labels = qa9$`Vị trí`, values =qa9$Manday , type = 'pie',
+               textposition = 'inside',
+               textinfo = 'label+percent',
+               insidetextfont = list(color = '#FFFFFF'),
+               hoverinfo = 'text',
+               text = ~paste( qa9$Manday, 'manday'),
+               marker = list(colors = colors,
+                             line = list(color = '#FFFFFF', width = 1)),
+               #The 'pull' attribute can also be used to create space between the sectors
+               showlegend = FALSE)
+plot91 <- plot91 %>% layout(title = 'Logtime theo từng vị trí',
+                      xaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE),
+                      yaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE))
+
+plot91
+```
+

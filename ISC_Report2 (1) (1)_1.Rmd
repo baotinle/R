@@ -1,0 +1,430 @@
+---
+title: "ISC Report - Báo cáo về doanh thu"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE,
+  message = FALSE,
+  warning = FALSE
+)
+```
+
+```{r}
+#### Packages
+library(DBI)
+library(RPostgres)
+library(readxl)
+library(ggplot2)
+library(plotly)
+library(dplyr)
+library(stringr)
+library(DT)
+library(forcats)
+library(tidyr)
+library(dygraphs)
+library(xts)
+library(apexcharter)
+library(base)
+
+load("~/isc_report_15_12/service1.RData")
+load("~/isc_report_15_12/icd10_af1.RData")
+
+```
+### **V.Thông tin doanh thu **
+#### **1. Phân tích tổng thu theo thời gian.**
+```{r}
+##### Phân tích số tiền bệnh nhân phải trả khi thăm khám bệnh
+
+### Phân tích số tiền bệnh nhân chi trả theo lịch sử vào viện
+
+dta_paid <- service1 %>%
+  mutate(date = as.Date(service_hospitalization_start, "%Y-%m-%d")) %>%
+  group_by(service_patient_history_id,
+           date,
+           service_patient_type,
+           service_gender,
+           service_district, service_province,
+           service_degree,
+           icd10_af1) %>%
+  summarise(cost = sum(service_patient_paid)) %>%
+  filter(cost > 1)
+
+dta_paid <- dta_paid %>%
+  mutate(month = format.Date(date, "%Y-%m"))
+
+dta_paid_obs <- dta_paid %>%
+  group_by(service_patient_history_id) %>%
+  summarise(costs = sum(cost))
+summary(dta_paid_obs$costs)
+```
+
+
+##### **1.1. Phân tích tổng thu của Viện theo ngày**
+```{r}
+dta_paid2 <- dta_paid %>%
+  group_by(service_patient_history_id,
+           date) %>%
+  summarise(costs = sum(cost)) %>%
+  group_by(date) %>%
+  summarise(costs2 = sum(costs))
+
+summary(dta_paid2$costs2)
+  
+apex(dta_paid2, type = "spline", aes(date, costs2), serie_name = "Tổng thu/ngày")%>%
+  ax_labs("Biểu đồ phân tích tổng thu/ngày của viện theo lượt tiếp đón") %>%
+  ax_yaxis(title = list(text = "Tổng số"),
+           axisBorder = list(
+             show = TRUE,
+             color = "#008FFB"),
+           labels = list(
+             formatter = format_num("~s"),
+             style = list(
+               colors = "#008FFB")))
+```
+
+
+##### **1.2. Phân tích tổng thu của Viện theo tháng**
+```{r}
+dta_paid3 <- dta_paid2 %>%
+  mutate(month = format.Date(date, "%Y-%m")) %>%
+  group_by(month) %>%
+  summarise(costs3 = sum(costs2),
+            costs4 = mean(costs2))
+
+summary(dta_paid3$costs3)
+
+apex(dta_paid3, type = "spline", aes(month, costs3), serie_name = "Tổng thu/tháng") %>%
+  add_line(aes(month, costs4), type = "spline", serie_name = "Trung bình thu/ngày") %>%
+  ax_markers(size = 4)%>%
+  ax_labs("Biểu đồ phân tích tổng thu/tháng của viện theo lượt tiếp đón") %>%
+  ax_yaxis(title = list(text = "Tổng số"),
+           axisBorder = list(
+             show = TRUE,
+             color = "#008FFB"),
+           labels = list(
+             formatter = format_num("~s"),
+             style = list(
+               colors = "#008FFB"))) %>%
+  ax_yaxis2(opposite = TRUE, title = list(text = "Trung bình/ngày"),
+            axisBorder = list(
+              show = TRUE,
+              color = "#00E396"
+            ),
+            labels = list(
+              formatter = format_num("~s"),
+              style = list(
+                colors = "#00E396"
+              )
+            ))
+```
+
+
+#### **2. Phân tích chi phí khám chữa bệnh theo đặc điểm người bệnh**
+```{r}
+dta2_paid <- service1 %>%
+  group_by(service_patient_history_id, service_patient_type) %>%
+  summarise(cost = sum(service_patient_paid)) %>%
+  filter(cost > 1)
+
+dta2_paid_s <- dta2_paid %>%
+  filter(service_patient_type == "S")
+
+summary(dta2_paid_s$cost)
+```
+
+##### **2.1. Phân tích chi phí khám chữa bệnh theo lượt tiếp đón với bệnh nhân bảo hiểm**
+```{r}
+dta2_paid_a <- dta2_paid %>%
+  filter(service_patient_type == "A")
+
+summary(dta2_paid_a$cost)
+```
+
+##### **2.2. Biểu đồ phân tích tổng thu nhập của Viện theo nhóm bệnh nhân BHYT - Dịch vụ**
+```{r}
+dta2_paid_as <- dta2_paid %>%
+  group_by(service_patient_type) %>%
+  summarise(costs = sum(cost))
+
+apex(dta2_paid_as, type = "pie", aes(service_patient_type, costs)) %>%
+  ax_labs("Biểu đồ tỷ lệ (%) tổng thu của viện theo nhóm bệnh nhân BHYT - Dịch vụ") %>%
+  ax_yaxis(labels = list(formatter = format_num("~s")))
+```
+
+##### **2.3. Phân tích tổng thu nhập của Viện theo Nam - Nữ**
+```{r}
+dta2_paid2 <- service1 %>%
+  group_by(service_patient_history_id, service_gender) %>%
+  summarise(cost = sum(service_patient_paid)) %>%
+  filter(cost > 1)
+
+dta2_paid2_m <- dta2_paid2 %>%
+  filter(service_gender == "M")
+
+summary(dta2_paid2_m$cost)
+
+dta2_paid2_f <- dta2_paid2 %>%
+  filter(service_gender == "F")
+
+summary(dta2_paid2_f$cost)
+```
+
+```{r}
+dta2_paid2_gender <- dta2_paid2 %>%
+  group_by(service_gender) %>%
+  summarise(costs = sum(cost))
+
+apex(dta2_paid2_gender, type = "pie", aes(service_gender, costs)) %>%
+  ax_labs("Biểu đồ tỷ lệ (%) tổng thu của viện theo nhóm bệnh nhân BHYT - Dịch vụ") %>%
+  ax_yaxis(labels = list(formatter = format_num("~s")))
+```
+
+#### **3. Phân tích tổng thu theo tỉnh/thành phố**
+##### **3.1. Biểu đồ phân tích tổng thu nhập của Viện theo Tỉnh/Thành phố (Tất cả)**
+```{r}
+dta2_paid3 <- service1 %>%
+  group_by(service_patient_history_id, service_province) %>%
+  summarise(cost = sum(service_patient_paid)) %>%
+  filter(cost > 1)
+
+dta2_paid3_pro <- dta2_paid3 %>%
+  group_by(service_province) %>%
+  summarise(costs = sum(cost)) %>%
+  arrange(desc(costs))
+
+apex(dta2_paid3_pro, type = "bar", aes(service_province, costs), serie_name = "Tổng thu", height = 1200) %>%
+  ax_colors("#fd8d3c") %>%
+  ax_labs("Biểu đồ phân tích tổng thu của viện theo tỉnh/thành phố") %>%
+  ax_xaxis(labels = list(formatter = format_num("~s")))
+```
+
+
+##### **3.2. Biểu đồ phân tích tổng thu nhập của Viện theo Tỉnh/Thành phố (Không bao gồm Hà Nội)**
+```{r}
+dta2_paid3_pro2 <- dta2_paid3_pro %>%
+  filter(service_province != "Hà Nội")
+
+apex(dta2_paid3_pro2, type = "bar", aes(service_province, costs), serie_name = "Tổng thu", height = 1200) %>%
+  ax_colors("#41ab5d") %>%
+  ax_labs("Biểu đồ phân tích tổng thu của viện theo tỉnh/thành phố (Không bao gồm Hà Nội)") %>%
+  ax_xaxis(labels = list(formatter = format_num("~s")))
+```
+
+
+#### **4. Mười dịch vụ có tổng thu nhiều nhất theo tháng **
+```{r}
+plot31<- service1 %>%
+  filter(month == 1) %>%
+  group_by(service_provider) %>%
+  summarise(totals = sum(service_total_paid)) %>%
+  arrange(desc(totals)) %>%
+  head(n=10) %>%
+  apex(type = "column", aes(service_provider, totals)) %>%
+  ax_colors("#004d99") %>%
+  ax_labs(title = "10 dịch vụ có doanh thu cao nhất theo tháng 1") %>%
+  ax_xaxis(labels = list(rotate = 0))
+plot31
+
+plot32<- service1 %>%
+  filter(month == 2) %>%
+  group_by(service_provider) %>%
+  summarise(totals = sum(service_total_paid)) %>%
+  arrange(desc(totals)) %>%
+  head(n=10) %>%
+  apex(type = "column", aes(service_provider, totals)) %>%
+  ax_colors("#004d99") %>%
+  ax_labs(title = "20 dịch vụ có doanh thu cao nhất theo tháng 2") %>%
+  ax_xaxis(labels = list(rotate = 0))
+plot32
+
+plot33<- service1 %>%
+  filter(month == 3) %>%
+  group_by(service_provider) %>%
+  summarise(totals = sum(service_total_paid)) %>%
+  arrange(desc(totals)) %>%
+  head(n=10) %>%
+  apex(type = "column", aes(service_provider, totals)) %>%
+  ax_colors("#004d99") %>%
+  ax_labs(title = "20 dịch vụ có doanh thu cao nhất theo tháng 3") %>%
+  ax_xaxis(labels = list(rotate = 0))
+plot33
+
+plot34<- service1 %>%
+  filter(month == 4) %>%
+  group_by(service_provider) %>%
+  summarise(totals = sum(service_total_paid)) %>%
+  arrange(desc(totals)) %>%
+  head(n=10) %>%
+  apex(type = "column", aes(service_provider, totals)) %>%
+  ax_colors("#004d99") %>%
+  ax_labs(title = "20 dịch vụ có doanh thu cao nhất theo tháng 4") %>%
+  ax_xaxis(labels = list(rotate = 0))
+plot34
+
+plot35<- service1 %>%
+  filter(month == 1) %>%
+  group_by(service_provider) %>%
+  summarise(totals = sum(service_total_paid)) %>%
+  arrange(desc(totals)) %>%
+  head(n=10) %>%
+  apex(type = "column", aes(service_provider, totals)) %>%
+  ax_colors("#004d99") %>%
+  ax_labs(title = "20 dịch vụ có doanh thu cao nhất theo tháng 5") %>%
+  ax_xaxis(labels = list(rotate = 0))
+plot35
+
+plot36<- service1 %>%
+  filter(month == 1) %>%
+  group_by(service_provider) %>%
+  summarise(totals = sum(service_total_paid)) %>%
+  arrange(desc(totals)) %>%
+  head(n=10) %>%
+  apex(type = "column", aes(service_provider, totals)) %>%
+  ax_colors("#004d99") %>%
+  ax_labs(title = "20 dịch vụ có doanh thu cao nhất theo tháng 6") %>%
+  ax_xaxis(labels = list(rotate = 0))
+plot36
+
+plot37<- service1 %>%
+  filter(month == 1) %>%
+  group_by(service_provider) %>%
+  summarise(totals = sum(service_total_paid)) %>%
+  arrange(desc(totals)) %>%
+  head(n=10) %>%
+  apex(type = "column", aes(service_provider, totals)) %>%
+  ax_colors("#004d99") %>%
+  ax_labs(title = "20 dịch vụ có doanh thu cao nhất theo tháng 7") %>%
+  ax_xaxis(labels = list(rotate = 0))
+plot37
+
+plot38<- service1 %>%
+  filter(month == 1) %>%
+  group_by(service_provider) %>%
+  summarise(totals = sum(service_total_paid)) %>%
+  arrange(desc(totals)) %>%
+  head(n=10) %>%
+  apex(type = "column", aes(service_provider, totals)) %>%
+  ax_colors("#004d99") %>%
+  ax_labs(title = "20 dịch vụ có doanh thu cao nhất theo tháng 8") %>%
+  ax_xaxis(labels = list(rotate = 0))
+plot38
+
+plot39<- service1 %>%
+  filter(month == 1) %>%
+  group_by(service_provider) %>%
+  summarise(totals = sum(service_total_paid)) %>%
+  arrange(desc(totals)) %>%
+  head(n=10) %>%
+  apex(type = "column", aes(service_provider, totals)) %>%
+  ax_colors("#004d99") %>%
+  ax_labs(title = "20 dịch vụ có doanh thu cao nhất theo tháng 9") %>%
+  ax_xaxis(labels = list(rotate = 0))
+plot39
+
+plot310<- service1 %>%
+  filter(month == 1) %>%
+  group_by(service_provider) %>%
+  summarise(totals = sum(service_total_paid)) %>%
+  arrange(desc(totals)) %>%
+  head(n=10) %>%
+  apex(type = "column", aes(service_provider, totals)) %>%
+  ax_colors("#004d99") %>%
+  ax_labs(title = "20 dịch vụ có doanh thu cao nhất theo tháng 10") %>%
+  ax_xaxis(labels = list(rotate = 0))
+plot310
+
+plot311<- service1 %>%
+  filter(month == 1) %>%
+  group_by(service_provider) %>%
+  summarise(totals = sum(service_total_paid)) %>%
+  arrange(desc(totals)) %>%
+  head(n=10) %>%
+  apex(type = "column", aes(service_provider, totals)) %>%
+  ax_colors("#004d99") %>%
+  ax_labs(title = "20 dịch vụ có doanh thu cao nhất theo tháng 11") %>%
+  ax_xaxis(labels = list(rotate = 0))
+plot311
+
+plot312<- service1 %>%
+  filter(month == 1) %>%
+  group_by(service_provider) %>%
+  summarise(totals = sum(service_total_paid)) %>%
+  arrange(desc(totals)) %>%
+  head(n=10) %>%
+  apex(type = "column", aes(service_provider, totals)) %>%
+  ax_colors("#004d99") %>%
+  ax_labs(title = "20 dịch vụ có doanh thu cao nhất theo tháng 12") %>%
+  ax_xaxis(labels = list(rotate = 0))
+plot312
+
+```
+
+
+#### **4. Phân tích tổng thu theo thời gian của 5 nhóm bệnh được chẩn đoán nhiều nhất**
+
+##### **4.1. Biểu đồ phân tích tổng thu nhập của Viện theo chẩn đoán bệnh (phân nhóm chương mục lớn)**
+```{r}
+load("~/ISC/dta2_paid4.RData")
+
+dta2_paid4_af1 <- dta2_paid4 %>%
+  group_by(icd10_d1_names) %>%
+  summarise(costs = sum(cost)) %>%
+  head(n=5)%>%
+  arrange(desc(costs))
+
+apex(dta2_paid4_af1, type = "bar", aes(icd10_d1_names, costs), serie_name = "Tổng thu", height = 800) %>%
+  ax_colors("#225ea8") %>%
+  ax_labs("Biểu đồ phân tích tổng thu của viện theo chẩn đoán bệnh (phân nhóm chương mục lớn))") %>%
+  ax_xaxis(labels = list(formatter = format_num("~s")))
+```
+
+
+#### **4.2. Biểu đồ phân tích tỉ lệ giữa số lượt chẩn đoán và doanh thu theo nhóm bệnh (phân nhóm chương mục lớn)**
+```{r}
+mer<- service1 %>%
+  group_by(service_patient_history_id) %>%
+  summarise(total = sum(service_patient_paid))
+
+data<- inner_join(icd10_af1, mer, by = "service_patient_history_id")
+
+
+dta<- data %>%
+  mutate(count = 1) %>%
+  group_by(icd10_af1_d1_names) %>%
+  summarise(counts = sum(count),
+            totals = sum(total)) %>%
+  arrange(desc(counts))
+
+dta$totals<- as.numeric(dta$totals)
+dta$totals<- round(dta$totals/1000000,0)
+
+
+p1<- apex(dta, type = "column", aes(icd10_af1_d1_names, counts)) %>%
+  add_line(aes(icd10_af1_d1_names, totals)) %>%
+  ax_colors(c("#2E93fA", "#E91E63")) %>%
+  ax_stroke(curve = "smooth", width = 1.5) %>%
+  #ax_xaxis(labels = function(icd10_af1_d1_names) stringr::str_trunc(icd10_af1_d1_names, 12)) %>%
+  #ax_labels(stringr::str_trunc(icd10_af1_d1_names, 12)) %>%
+  ax_yaxis(
+    decimalsInFloat = 0,
+    title = list(text = "Số lượt chẩn đoán"),
+    labels = list(
+      formatter = format_num("~s"),
+      minWidth = 40)) %>% 
+  ax_yaxis2(
+    opposite = TRUE,
+    decimalsInFloat = 2,
+    title = list(text = "Tổng Doanh thu")) %>%
+  ax_labs(title = "Biểu đồ phân tích Doanh thu trên tổng số lượt chẩn đoán của mỗi nhóm bệnh",
+          subtitle = "Đơn vị: Triệu VNĐ") %>%
+  ax_title(
+    style = list(fontSize = "14px")) %>% 
+  ax_subtitle(
+    style = list(fontSize = "12px", color = "#BDBDBD"))
+
+p1
+```
+
+

@@ -1,0 +1,69 @@
+---
+title: "ISC Report - Báo cáo phân tích thêm"
+output: html_document
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE,
+  message = FALSE,
+  warning = FALSE
+)
+```
+
+
+```{r}
+#### Packages
+library(DBI)
+library(RPostgres)
+library(readxl)
+library(ggplot2)
+library(plotly)
+library(dplyr)
+library(stringr)
+library(DT)
+library(forcats)
+library(tidyr)
+library(dygraphs)
+library(xts)
+library(apexcharter)
+library(base)
+library(lubridate)
+library(correlationfunnel)
+library(tidyverse)
+library(tidyquant)
+library(shiny)
+library(hrbrthemes)
+library(scales)
+load("~/patient/isc_1.RData")
+```
+
+
+```{r}
+inputPanel(
+  shiny::selectizeInput(inputId = "month",
+                        label = "Tháng",
+                        choices = c("2020-01", "2020-02","2020-03","2020-04","2020-05","2020-06","2020-07",
+                                    "2020-08","2020-09","2020-10","2020-11","2020-12",
+                                    "2021-01", "2021-02","2021-03","2021-04","2021-05","2021-06","2021-07",
+                                    "2021-08","2021-09","2021-10","2021-11","2021-12"),
+                        selected = "2020-01")
+)
+
+output$p1<- renderApexchart({
+
+isc_h1 <- isc_1 %>%
+  filter(!is.na(icd10_d2_names))%>%
+  filter(month_start ==input$month) %>%       
+  mutate(count=1) %>%
+  group_by(icd10_d2_names) %>%
+  summarise(counts = sum(count))%>%
+  arrange(desc(counts)) %>%
+  head(n=10)%>%
+  apex(type="column", aes(icd10_d2_names,counts))
+isc_h1
+})
+
+apexchartOutput("p1", height = "400px")
+```

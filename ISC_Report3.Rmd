@@ -1,0 +1,233 @@
+---
+title: "ISC Report - Báo cáo về người bệnh hợp đồng"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(
+  echo = FALSE,
+  message = FALSE,
+  warning = FALSE
+)
+
+#### Packages
+library(DBI)
+library(RPostgres)
+library(readxl)
+library(ggplot2)
+library(plotly)
+library(dplyr)
+library(stringr)
+library(DT)
+library(forcats)
+library(tidyr)
+library(dygraphs)
+library(xts)
+library(apexcharter)
+library(base)
+
+con <- dbConnect(RPostgres::Postgres(),dbname = 'dhydb', 
+                 host = '10.0.0.141', 
+                 port = 5432, 
+                 user = 'dhyuser',
+                 password = 'Isofh#12345')
+
+dbListTables(con)
+
+res4 <- dbSendQuery(con, "SELECT * FROM contract")
+while(!dbHasCompleted(res4)){
+  contract <- dbFetch(res4)
+  print(nrow(contract))
+}
+
+contract <- contract %>%
+  mutate(date = format.Date(contract_creation_date, "%Y-%m-%d")) %>%
+  mutate(month = format.Date(contract_creation_date, "%Y-%m")) %>%
+  mutate(contract_total_amount =  replace_na(contract_total_amount, 0)) %>%
+  mutate(weekdays = weekdays(contract_creation_date))
+
+contract$contract_service_pack_id<- str_trim(contract$contract_service_pack_id)
+contract$contract_service_pack_id[contract$contract_service_pack_id == "BGĐ"] <- "BGD"
+contract$contract_service_pack_id[contract$contract_service_pack_id == "CB>40T"] <- "CB>=40"
+contract$contract_service_pack_id[contract$contract_service_pack_id == "FT4,TSH"] <- "FT4 TSH"
+contract$contract_service_pack_id[contract$contract_service_pack_id == "HBSAB ĐỊNH LƯỢNG"] <- "HBSAB DINH LUONG"
+contract$contract_service_pack_id[contract$contract_service_pack_id == "MĐX"] <- "MDX"
+contract$contract_service_pack_id[contract$contract_service_pack_id == "NAM >=40T"] <- "NAM >=40"
+contract$contract_service_pack_id[contract$contract_service_pack_id == "NỮ GÓI PHÉP"] <- "NU GOI PHEP"
+contract$contract_service_pack_id[contract$contract_service_pack_id == "NU CHUYÊN SÂU"] <- "NU CHUYEN SAU"
+contract$contract_service_pack_id[contract$contract_service_pack_id == "NỮ"] <- "NU"
+
+
+contract<- contract %>%
+  mutate(NU = grepl("NU", contract_service_pack_id)) %>%
+  mutate(NAM = grepl("NAM", contract_service_pack_id))
+
+contract$Gender<- ""
+contract$Gender[contract$NU == TRUE]<- "Female"
+contract$Gender[contract$NAM == TRUE]<- "Male"
+contract$Gender<- replace(contract$Gender, contract$Gender == "", NA)
+
+```
+
+
+#### **1. Phân tích dịch vụ được sử dụng trong hợp đồng theo số lượng**
+```{r, echo=FALSE}
+plot1 <- contract %>%
+  mutate(count = 1) %>%
+  group_by(contract_service_name) %>%
+  summarise(counts = sum(count)) %>%
+  arrange(desc(counts)) %>%
+  apex(type = "column", aes(contract_service_name, counts)) %>%
+  ax_colors("#ff9900") %>%
+  ax_yaxis(title = list(text = "Số lượng")) %>%
+  ax_labs(title = "Biểu đồ phân tích dịch vụ thường được sử dụng trong khám sức doanh nghiệp") %>%
+  ax_xaxis(labels = list(rotate = 0, trim = TRUE))
+plot1
+```
+
+#### **2. 50 dịch vụ được sử dụng nhiều nhất trong khám sức khỏe doanh nghiệp**
+```{r, echo=FALSE}
+plot2 <- contract %>%
+  mutate(count = 1) %>%
+  group_by(contract_service_name) %>%
+  summarise(counts = sum(count)) %>%
+  arrange(desc(counts)) %>%
+  head(n=50) %>%
+  apex(type = "column", aes(contract_service_name, counts)) %>%
+  ax_colors("#cc2900") %>%
+  ax_yaxis(title = list(text = "Số lượng")) %>%
+  ax_labs(title = "50 dịch vụ thường được sử dụng trong khám sức doanh nghiệp") %>%
+  ax_xaxis(labels = list(rotate = 0, trim = TRUE))
+plot2
+```
+
+
+#### 
+```{r, echo=FALSE}
+plot2 <- contract %>%
+  filter(!is.na(Gender)) %>%
+  mutate(count = 1) %>%
+  group_by(contract_service_name, Gender) %>%
+  summarise(counts = sum(count)) %>%
+  arrange(desc(counts)) %>%
+  head(n=100) %>%
+  apex(type = "column", aes(contract_service_name, counts, fill = Gender)) %>%
+  ax_colors(c("#2E93fA", "#E91E63")) %>%
+  ax_yaxis(
+    decimalsInFloat = 0,
+    labels = list(
+      formatter = format_num("~s"),
+      minWidth = 40)) %>%
+  ax_labs(title = "50 dịch vụ thường được sử dụng trong khám sức doanh nghiệp (theo giới tính)") %>%
+  ax_chart(stacked = TRUE) %>%
+  ax_xaxis(labels = list(rotate = 0, trim = TRUE))
+plot2
+```
+
+####
+```{r, echo=FALSE}
+plot2 <- contract %>%
+  filter(Gender =="Female") %>%
+  mutate(count = 1) %>%
+  group_by(contract_service_name, Gender) %>%
+  summarise(counts = sum(count)) %>%
+  arrange(desc(counts)) %>%
+  head(n=50) %>%
+  apex(type = "column", aes(contract_service_name, counts)) %>%
+  ax_colors("#800033") %>%
+  ax_yaxis(
+    decimalsInFloat = 0,
+    labels = list(
+      formatter = format_num("~s"),
+      minWidth = 40)) %>%
+  ax_labs(title = "50 dịch vụ thường được sử dụng trong khám sức doanh nghiệp cho nữ") %>%
+  ax_xaxis(labels = list(rotate = 0, trim = TRUE))
+
+plot2
+```
+
+
+####
+```{r, echo=FALSE}
+plot2 <- contract %>%
+  filter(Gender =="Male") %>%
+  mutate(count = 1) %>%
+  group_by(contract_service_name, Gender) %>%
+  summarise(counts = sum(count)) %>%
+  arrange(desc(counts)) %>%
+  head(n=50) %>%
+  apex(type = "column", aes(contract_service_name, counts)) %>%
+  ax_colors("#004d00") %>%
+  ax_yaxis(
+    decimalsInFloat = 0,
+    labels = list(
+      formatter = format_num("~s"),
+      minWidth = 40)) %>%
+  ax_labs(title = "50 dịch vụ thường được sử dụng trong khám sức doanh nghiệp cho nam") %>%
+  ax_xaxis(labels = list(rotate = 0, trim = TRUE))
+
+plot2
+```
+
+
+#### **3. Phân tích số lượng hợp đồng theo tháng trong năm**
+```{r, echo=FALSE}
+plot3<- contract %>%
+  mutate(duplicate = duplicated(contract_id)) %>%
+  filter(duplicate == FALSE) %>%
+  mutate(count = 1) %>%
+  group_by(month) %>%
+  summarise(counts = sum(count)) %>%
+  apex(type = "column", aes(month, counts)) %>%
+  ax_colors("#009900") %>%
+  ax_yaxis(title = list(text = "Số lượng")) %>%
+  ax_labs(title = "Biểu đồ phân tích dịch vụ thường được sử dụng trong khám sức doanh nghiệp")
+
+plot3
+```
+
+
+#### **4. Phân tích số lượng hợp đồng và doanh thu theo tháng trong năm**
+```{r, echo=FALSE}
+plot4<- contract %>%
+  mutate(duplicate = duplicated(contract_id)) %>%
+  filter(duplicate == FALSE) %>%
+  mutate(count = 1) %>%
+  group_by(month) %>%
+  summarise(counts = sum(count),
+            totals = round(sum(contract_total_amount)/1000000),2) %>%
+  filter(totals >0) %>%
+  arrange(desc(totals)) %>%
+  apex(type = "column", aes(month, counts)) %>%
+  add_line(aes(month, totals)) %>%
+  ax_colors(c("#2E93fA", "#E91E63")) %>%
+  ax_yaxis(
+    decimalsInFloat = 0,
+    title = list(text = "Số lượng hợp đồng"),
+    labels = list(
+      formatter = format_num("~s"),
+      minWidth = 40)) %>% 
+  ax_yaxis2(
+    opposite = TRUE,
+    decimalsInFloat = 2,
+    title = list(text = "Doanh thu")) %>%
+  ax_labs(title = "Biểu đồ phân tích Doanh thu trên số lượng hợp đồng theo tháng",
+          subtitle = "Đơn vị: Triệu VNĐ") %>%
+  ax_title(
+    style = list(fontSize = "14px")) %>% 
+  ax_subtitle(
+    style = list(fontSize = "12px", color = "#BDBDBD"))
+plot4
+```
+
+
+
+
+
+
+
+
+
+
+

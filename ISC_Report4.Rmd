@@ -1,0 +1,374 @@
+---
+title: "ISC Report - Báo cáo phân tích thêm"
+output: html_document
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE,
+  message = FALSE,
+  warning = FALSE
+)
+```
+
+
+```{r}
+#### Packages
+library(DBI)
+library(RPostgres)
+library(readxl)
+library(ggplot2)
+library(plotly)
+library(dplyr)
+library(stringr)
+library(DT)
+library(forcats)
+library(tidyr)
+library(dygraphs)
+library(xts)
+library(apexcharter)
+library(base)
+library(lubridate)
+library(correlationfunnel)
+library(tidyquant)
+library(tidyverse)
+library(shiny)
+library(hrbrthemes)
+library(scales)
+
+load("~/ISC/service1.RData")
+load("~/ISC/icd10_af1.RData")
+
+service1$service_icd_main_disease_diagnosis[service1$service_icd_main_disease_diagnosis == "'"]<- NA
+
+service1$icd10_sa <- str_replace_all(service1$service_icd_main_disease_diagnosis, ";", " ") %>%
+  str_replace_all("[[:punct:]]", "")
+
+service1$icd10_af1 <- str_extract(service1$icd10_sa,"(\\w+)")
+service1$icd10_af1 <- substr(service1$icd10_af1, 1, 3)
+
+service1$date <- as.Date(service1$service_hospitalization_start, "%Y-%m-%d")
+service1$birthday <- as.Date(service1$service_birthday, "%Y-%m-%d")
+service1$age <- (as.numeric(service1$date - service1$birthday))/365
+service1$age2 <- (as.numeric(Sys.Date() - service1$birthday))/365
+
+service1<- service1 %>%
+  mutate(month = month(date))
+
+```
+
+
+#### **1. Phân tích bệnh được chẩn đoán theo tháng**
+```{r}
+inputPanel(
+  shiny::selectizeInput(inputId = "month",
+                        label = "Tháng",
+                        choices = c(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12),
+                        selected = 1)
+)
+
+output$p1<- renderApexchart({
+  
+plot1<- service1 %>%
+  mutate(dup = duplicated(service_patient_history_id)) %>%
+  filter(dup == FALSE) %>%
+  filter(month == input$month) %>%
+  filter(!is.na(icd10_af1)) %>%
+  mutate(count = 1) %>%
+  group_by(icd10_af1) %>%
+  summarise(counts = sum(count)) %>%
+  arrange(desc(counts)) %>%
+  head(n=20) %>%
+  apex(type = "column", aes(icd10_af1, counts)) %>%
+  ax_colors("#800060") %>%
+  ax_labs(title = "20 mã bệnh ICD10 được chẩn đoán nhiều nhất theo tháng")
+  
+plot1
+})
+
+apexchartOutput("p1", height = "400px")
+```
+
+
+#### **2. Phân tích dịch vụ được sử dụng nhiều theo tháng **
+```{r}
+inputPanel(
+  shiny::selectizeInput(inputId = "month2",
+                        label = "Tháng",
+                        choices = c(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12),
+                        selected = 1)
+)
+
+output$p2<- renderApexchart({
+  
+plot2<- service1 %>%
+  filter(month == input$month2) %>%
+  mutate(count = 1) %>%
+  group_by(service_provider) %>%
+  summarise(counts = sum(count)) %>%
+  arrange(desc(counts)) %>%
+  head(n=20) %>%
+  apex(type = "column", aes(service_provider, counts)) %>%
+  ax_colors("#ff8000") %>%
+  ax_labs(title = "20 dịch vụ được sử dụng nhiều nhất theo tháng") %>%
+  ax_xaxis(labels = list(rotate = 0))
+  
+plot2
+})
+
+apexchartOutput("p2", height = "400px")
+```
+
+
+#### **3. Phân tích dịch vụ có doanh thu cao nhất theo tháng **
+```{r}
+inputPanel(
+  shiny::selectizeInput(inputId = "month3",
+                        label = "Tháng",
+                        choices = c(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12),
+                        selected = 1)
+)
+
+output$p3<- renderApexchart({
+  
+plot3<- service1 %>%
+  filter(month == input$month3) %>%
+  group_by(service_provider) %>%
+  summarise(totals = sum(service_total_paid)) %>%
+  arrange(desc(totals)) %>%
+  head(n=20) %>%
+  apex(type = "column", aes(service_provider, totals)) %>%
+  ax_colors("#004d99") %>%
+  ax_labs(title = "20 dịch vụ có doanh thu cao nhất theo tháng") %>%
+  ax_xaxis(labels = list(rotate = 0))
+  
+plot3
+})
+
+apexchartOutput("p3", height = "400px")
+```
+
+
+#### **4. Phân tích dịch vụ sử dụng**
+##### **4.1. Top 50 dịch vụ được sử dụng nhiều nhất**
+```{r}
+plot4<- service1 %>%
+  mutate(count = 1) %>%
+  group_by(service_provider) %>%
+  summarise(counts = sum(count)) %>%
+  arrange(desc(counts)) %>%
+  head(n=50) %>%
+  apex(type = "column", aes(service_provider, counts), height = "400px") %>%
+  ax_colors("#800000") %>%
+  ax_labs(title = "50 dịch vụ có nhiều lượt sử dụng nhất") %>%
+  ax_xaxis(labels = list(rotate = 0))
+plot4
+```
+
+
+##### **4.2. Top 50 dịch vụ được sử dụng nhiều nhất (theo giới tính)**
+```{r}
+plot4<- service1 %>%
+  mutate(count = 1) %>%
+  group_by(service_provider, service_gender) %>%
+  summarise(counts = sum(count)) %>%
+  arrange(desc(counts)) %>%
+  head(n=50) %>%
+  apex(type = "column", aes(service_provider, counts, fill = service_gender), height = "400px") %>%
+  ax_colors("#000066", "#00804d") %>%
+  ax_labs(title = "50 dịch vụ có nhiều lượt sử dụng nhất") %>%
+  ax_chart(stacked = TRUE) %>%
+  ax_xaxis(labels = list(rotate = 0))
+plot4
+```
+
+
+##### **4.3. Top 50 dịch vụ được sử dụng nhiều nhất theo giới tính nam**
+```{r}
+plot4<- service1 %>%
+  filter(service_gender == "M") %>%
+  mutate(count = 1) %>%
+  group_by(service_provider, service_gender) %>%
+  summarise(counts = sum(count)) %>%
+  arrange(desc(counts)) %>%
+  head(n=50) %>%
+  apex(type = "column", aes(service_provider, counts, fill = service_gender), height = "400px") %>%
+  ax_colors("#000066") %>%
+  ax_labs(title = "50 dịch vụ có nhiều lượt sử dụng nhất bệnh") %>%
+  ax_chart(stacked = TRUE) %>%
+  ax_xaxis(labels = list(rotate = 0))
+plot4
+```
+
+
+##### **4.4. Top 50 dịch vụ được sử dụng nhiều nhất theo giới tính nữ**
+```{r}
+plot4<- service1 %>%
+  filter(service_gender == "F") %>%
+  mutate(count = 1) %>%
+  group_by(service_provider, service_gender) %>%
+  summarise(counts = sum(count)) %>%
+  arrange(desc(counts)) %>%
+  head(n=50) %>%
+  apex(type = "column", aes(service_provider, counts, fill = service_gender), height = "400px") %>%
+  ax_colors("#00804d") %>%
+  ax_labs(title = "50 dịch vụ có nhiều lượt sử dụng nhất") %>%
+  ax_chart(stacked = TRUE) %>%
+  ax_xaxis(labels = list(rotate = 0))
+plot4
+```
+
+
+#### **5. Phân tích vấn đề sức khỏe theo độ tuổi**
+```{r}
+d1<- service1 %>%
+  mutate(dup = duplicated(service_patient_history_id)) %>%
+  filter(dup == FALSE)
+
+plot5<- d1 %>%
+  mutate(count = 1) %>%
+  filter(!is.na(icd10_af1)) %>%
+  group_by(icd10_af1) %>%
+  summarise(counts = sum(count)) %>%
+  arrange(desc(counts)) %>%
+  head(n = 10) %>%
+  apex(type = "bar", aes(icd10_af1, counts)) %>%
+  ax_labs(title = "10 bệnh được chẩn đoán nhiều nhất cho bệnh nhân")
+plot5
+
+inputPanel(
+  shiny::selectizeInput(inputId = "icd",
+                        label = "Bệnh chẩn đoán",
+                        choices = c("K29: Viêm dạ dày và tá tràng" = "K29",
+  "Z00: Khám tổng quát và kiểm tra sức khỏe cho những người không có bệnh được chẩn đoán trước đó hoặc không có than phiền về sức khỏe" = "Z00",
+  "Z01: Khám chuyên khoa và kiểm tra sức khỏe khác cho những người không có bệnh được chẩn đoán trước đó hoặc không có than phiền về sức khỏe" = "Z01",
+  "I10: Tăng huyết áp vô căn (nguyên phát)" = "I10",
+  "J31: Viêm mũi, viêm mũi họng, viêm họng mạn tính" = "J31",
+  "M54: Đau lưng" = "M54",
+  "R51: Đau đầu" = "R51",
+  "K21: Bệnh trào ngược dạ dày - thực quản" = "K21",
+  "M25: Bệnh khớp khác, không phân loại nơi khác" = "M25",
+  "B18: Viêm gan virus mạn" = "B18"),
+                        selected = "K29")
+)
+
+output$p5<- renderPlotly({
+plot5_2<- d1 %>%
+  filter(icd10_af1 == input$icd) %>%
+  ggplot(aes(x=age)) +
+  geom_histogram(color="#e9ecef", alpha=0.6, position = 'identity', fill = "#1E90FF", binwidth = 5) +
+  theme_ipsum() +
+  labs(fill = "") +
+  xlab("Độ tuổi") +
+  ylab("Số lượng bệnh nhân")
+ggplotly(plot5_2)
+})
+
+plotlyOutput("p5", height = "400px")
+```
+
+
+#### **6. Danh sách dịch vụ mà BN chỉ làm dịch vụ (N/A)**
+```{r}
+table<- service1 %>%
+  filter(is.na(service_icd_main_disease_diagnosis)) %>%
+  filter(is.na(service_main_disease_diagnosis)) %>%
+  mutate(count = 1) %>%
+  group_by(service_provider, service_price) %>%
+  summarise(counts = sum(count)) %>%
+  mutate(service_price = label_number_si(accuracy=0.1) (service_price)) %>%
+  arrange(desc(counts))
+
+datatable(    
+  head(table, n = nrow(d1), width = "auto", options = list(pageLength = 10)),
+  colnames = c( 
+    "STT", "Tên dịch vụ", "Giá dịch vụ", "Số lượt khám"),
+  filter = 'top') 
+```
+
+
+
+#### **7. Phân tích vấn đề sức khỏe theo khu vực địa lý **
+```{r}
+
+plot7<- d1 %>%
+  mutate(count = 1) %>%
+  filter(!is.na(service_province)) %>%
+  group_by(service_province) %>%
+  summarise(counts = sum(count)) %>%
+  arrange(desc(counts)) %>%
+  head(n = 10) %>%
+  apex(type = "bar", aes(service_province, counts)) %>%
+  ax_labs(title = "10 tỉnh/thành phố có số lượt khám tại viện")
+plot7
+
+inputPanel(
+  shiny::selectizeInput(inputId = "province",
+                        label = "Tỉnh/Thành phố",
+                        choices = c("Hà Nội", "Nam Định", "Thanh Hóa", "Phú Thọ", "Nghệ An", "Vĩnh Phúc", "Ninh Bình", "Bắc Giang", "Hải Dương", "Hưng Yên"),
+                        selected = "Hà Nội")
+)
+
+output$p7<- renderApexchart({
+  
+plot7_2<- d1 %>%
+  filter(service_province == input$province) %>%
+  mutate(count = 1) %>%
+  group_by(icd10_af1) %>%
+  summarise(counts = sum(count)) %>%
+  arrange(desc(counts)) %>%
+  head(n=10) %>%
+  apex(type = "bar", aes(icd10_af1, counts)) %>%
+  ax_colors("#7700b3") %>%
+  ax_labs(title = "10 bệnh được chẩn đoán nhiều nhất theo tỉnh") %>%
+  ax_xaxis(labels = list(rotate = 0))
+  
+plot7_2
+})
+
+apexchartOutput("p7", height = "400px")
+```
+
+
+#### **8. Phân tích vấn đề sức khỏe theo các quận/huyện thành phố Hà Nội**
+```{r}
+d2<- d1 %>%
+  filter(service_province == "Hà Nội") %>%
+  filter(service_district != "Cẩm Thủy") %>%
+  filter(service_district != "Kim Sơn") %>%
+  filter(service_district != "Thành phố Thanh Hóa")
+
+inputPanel(
+  shiny::selectizeInput(inputId = "district",
+                        label = "Tỉnh/Thành phố",
+                        choices = unique(d2$service_district),
+                        selected = "")
+)
+
+output$p8<- renderApexchart({
+  
+plot8<- d2 %>%
+  filter(is.na(icd10_af1)) %>%
+  filter(service_district == input$district) %>%
+  mutate(count = 1) %>%
+  group_by(icd10_af1) %>%
+  summarise(counts = sum(count)) %>%
+  arrange(desc(counts)) %>%
+  head(n=10) %>%
+  apex(type = "bar", aes(icd10_af1, counts)) %>%
+  ax_colors("#0055ff") %>%
+  ax_labs(title = "10 bệnh được chẩn đoán nhiều nhất theo quận/huyện thành phố Hà Nội") %>%
+  ax_xaxis(labels = list(rotate = 0))
+  
+plot8
+})
+
+apexchartOutput("p8", height = "400px")
+```
+
+
+
+
+
+

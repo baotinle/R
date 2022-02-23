@@ -1,0 +1,815 @@
+---
+title: "ISC Report - Báo cáo về doanh thu"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+#### Packages
+library(DBI)
+library(RPostgres)
+library(readxl)
+library(ggplot2)
+library(plotly)
+library(dplyr)
+library(stringr)
+library(DT)
+library(forcats)
+library(tidyr)
+library(dygraphs)
+library(xts)
+library(apexcharter)
+library(base)
+
+load("~/ISC/service1.RData")
+load("~/ISC/icd10_af1.RData")
+
+```
+
+
+#### **1. Tổng chi phí khám chữa bệnh theo lượt tiếp đón**
+```{r, echo=FALSE}
+##### Phân tích số tiền bệnh nhân phải trả khi thăm khám bệnh
+
+### Phân tích số tiền bệnh nhân chi trả theo lịch sử vào viện
+
+dta_paid <- service1 %>%
+  mutate(date = as.Date(service_hospitalization_start, "%Y-%m-%d")) %>%
+  group_by(service_patient_history_id,
+           date,
+           service_patient_type,
+           service_gender,
+           service_district, service_province,
+           service_degree,
+           icd10_af1) %>%
+  summarise(cost = sum(service_patient_paid)) %>%
+  filter(cost > 1)
+
+dta_paid <- dta_paid %>%
+  mutate(month = format.Date(date, "%Y-%m"))
+
+dta_paid_obs <- dta_paid %>%
+  group_by(service_patient_history_id) %>%
+  summarise(costs = sum(cost))
+summary(dta_paid_obs$costs)
+```
+
+
+#### **2. Phân tích tổng thu của Viện theo ngày**
+```{r, echo=FALSE}
+dta_paid2 <- dta_paid %>%
+  group_by(service_patient_history_id,
+           date) %>%
+  summarise(costs = sum(cost)) %>%
+  group_by(date) %>%
+  summarise(costs2 = sum(costs))
+
+summary(dta_paid2$costs2)
+  
+apex(dta_paid2, type = "spline", aes(date, costs2), serie_name = "Tổng thu/ngày")%>%
+  ax_labs("Biểu đồ phân tích tổng thu/ngày của viện theo lượt tiếp đón") %>%
+  ax_yaxis(title = list(text = "Tổng số"),
+           axisBorder = list(
+             show = TRUE,
+             color = "#008FFB"),
+           labels = list(
+             formatter = format_num("~s"),
+             style = list(
+               colors = "#008FFB")))
+```
+
+
+#### **3. Phân tích tổng thu của Viện theo tháng**
+```{r, echo=FALSE}
+dta_paid3 <- dta_paid2 %>%
+  mutate(month = format.Date(date, "%Y-%m")) %>%
+  group_by(month) %>%
+  summarise(costs3 = sum(costs2),
+            costs4 = mean(costs2))
+
+summary(dta_paid3$costs3)
+
+apex(dta_paid3, type = "spline", aes(month, costs3), serie_name = "Tổng thu/tháng") %>%
+  add_line(aes(month, costs4), type = "spline", serie_name = "Trung bình thu/ngày") %>%
+  ax_markers(size = 4)%>%
+  ax_labs("Biểu đồ phân tích tổng thu/tháng của viện theo lượt tiếp đón") %>%
+  ax_yaxis(title = list(text = "Tổng số"),
+           axisBorder = list(
+             show = TRUE,
+             color = "#008FFB"),
+           labels = list(
+             formatter = format_num("~s"),
+             style = list(
+               colors = "#008FFB"))) %>%
+  ax_yaxis2(opposite = TRUE, title = list(text = "Trung bình/ngày"),
+            axisBorder = list(
+              show = TRUE,
+              color = "#00E396"
+            ),
+            labels = list(
+              formatter = format_num("~s"),
+              style = list(
+                colors = "#00E396"
+              )
+            ))
+```
+
+
+#### **4. Phân tích chi phí khám chữa bệnh theo lượt tiếp đón với bệnh nhân dịch vụ**
+```{r, echo=FALSE}
+dta2_paid <- service1 %>%
+  group_by(service_patient_history_id, service_patient_type) %>%
+  summarise(cost = sum(service_patient_paid)) %>%
+  filter(cost > 1)
+
+dta2_paid_s <- dta2_paid %>%
+  filter(service_patient_type == "S")
+
+summary(dta2_paid_s$cost)
+```
+
+#### **5. Phân tích chi phí khám chữa bệnh theo lượt tiếp đón với bệnh nhân bảo hiểm**
+```{r, echo=FALSE}
+dta2_paid_a <- dta2_paid %>%
+  filter(service_patient_type == "A")
+
+summary(dta2_paid_a$cost)
+```
+
+#### **6. Biểu đồ phân tích tổng thu nhập của Viện theo nhóm bệnh nhân BHYT - Dịch vụ**
+```{r, echo=FALSE}
+dta2_paid_as <- dta2_paid %>%
+  group_by(service_patient_type) %>%
+  summarise(costs = sum(cost))
+
+apex(dta2_paid_as, type = "pie", aes(service_patient_type, costs)) %>%
+  ax_labs("Biểu đồ tỷ lệ (%) tổng thu của viện theo nhóm bệnh nhân BHYT - Dịch vụ") %>%
+  ax_yaxis(labels = list(formatter = format_num("~s")))
+```
+
+#### **7. Phân tích tổng thu nhập của Viện theo Nam - Nữ**
+```{r, echo=FALSE}
+dta2_paid2 <- service1 %>%
+  group_by(service_patient_history_id, service_gender) %>%
+  summarise(cost = sum(service_patient_paid)) %>%
+  filter(cost > 1)
+
+dta2_paid2_m <- dta2_paid2 %>%
+  filter(service_gender == "M")
+
+summary(dta2_paid2_m$cost)
+
+dta2_paid2_f <- dta2_paid2 %>%
+  filter(service_gender == "F")
+
+summary(dta2_paid2_f$cost)
+```
+
+#### **8. Biểu đồ phân tích tổng thu nhập của Viện theo Nam - Nữ**
+```{r, echo=FALSE}
+dta2_paid2_gender <- dta2_paid2 %>%
+  group_by(service_gender) %>%
+  summarise(costs = sum(cost))
+
+apex(dta2_paid2_gender, type = "pie", aes(service_gender, costs)) %>%
+  ax_labs("Biểu đồ tỷ lệ (%) tổng thu của viện theo nhóm bệnh nhân BHYT - Dịch vụ") %>%
+  ax_yaxis(labels = list(formatter = format_num("~s")))
+```
+
+#### **9. Biểu đồ phân tích tổng thu nhập của Viện theo Tỉnh/Thành phố**
+#### *9.1. Biểu đồ phân tích tổng thu nhập của Viện theo Tỉnh/Thành phố (Tất cả)*
+```{r, echo=FALSE}
+dta2_paid3 <- service1 %>%
+  group_by(service_patient_history_id, service_province) %>%
+  summarise(cost = sum(service_patient_paid)) %>%
+  filter(cost > 1)
+
+dta2_paid3_pro <- dta2_paid3 %>%
+  group_by(service_province) %>%
+  summarise(costs = sum(cost)) %>%
+  arrange(desc(costs))
+
+apex(dta2_paid3_pro, type = "bar", aes(service_province, costs), serie_name = "Tổng thu", height = 1200) %>%
+  ax_colors("#fd8d3c") %>%
+  ax_labs("Biểu đồ phân tích tổng thu của viện theo tỉnh/thành phố") %>%
+  ax_xaxis(labels = list(formatter = format_num("~s")))
+```
+
+
+#### *9.2. Biểu đồ phân tích tổng thu nhập của Viện theo Tỉnh/Thành phố (Không bao gồm Hà Nội)*
+```{r, echo=FALSE}
+dta2_paid3_pro2 <- dta2_paid3_pro %>%
+  filter(service_province != "Hà Nội")
+
+apex(dta2_paid3_pro2, type = "bar", aes(service_province, costs), serie_name = "Tổng thu", height = 1200) %>%
+  ax_colors("#41ab5d") %>%
+  ax_labs("Biểu đồ phân tích tổng thu của viện theo tỉnh/thành phố (Không bao gồm Hà Nội)") %>%
+  ax_xaxis(labels = list(formatter = format_num("~s")))
+```
+
+
+#### **10. Biểu đồ phân tích tổng thu nhập của Viện theo chẩn đoán bệnh (phân nhóm chương mục lớn)**
+```{r, echo=FALSE}
+load("~/ISC/dta2_paid4.RData")
+
+dta2_paid4_af1 <- dta2_paid4 %>%
+  group_by(icd10_d1_names) %>%
+  summarise(costs = sum(cost)) %>%
+  arrange(desc(costs))
+
+apex(dta2_paid4_af1, type = "bar", aes(icd10_d1_names, costs), serie_name = "Tổng thu", height = 800) %>%
+  ax_colors("#225ea8") %>%
+  ax_labs("Biểu đồ phân tích tổng thu của viện theo chẩn đoán bệnh (phân nhóm chương mục lớn))") %>%
+  ax_xaxis(labels = list(formatter = format_num("~s")))
+```
+
+
+#### **11. Biểu đồ phân tích tỉ lệ giữa số lượt chẩn đoán và doanh thu theo nhóm bệnh (phân nhóm chương mục lớn)**
+```{r, echo=FALSE}
+mer<- service1 %>%
+  group_by(service_patient_history_id) %>%
+  summarise(total = sum(service_patient_paid))
+
+data<- inner_join(icd10_af1, mer, by = "service_patient_history_id")
+
+
+dta<- data %>%
+  mutate(count = 1) %>%
+  group_by(icd10_af1_d1_names) %>%
+  summarise(counts = sum(count),
+            totals = sum(total)) %>%
+  arrange(desc(counts))
+
+dta$totals<- as.numeric(dta$totals)
+dta$totals<- round(dta$totals/1000000,0)
+
+
+p1<- apex(dta, type = "column", aes(icd10_af1_d1_names, counts)) %>%
+  add_line(aes(icd10_af1_d1_names, totals)) %>%
+  ax_colors(c("#2E93fA", "#E91E63")) %>%
+  ax_stroke(curve = "smooth", width = 1.5) %>%
+  #ax_xaxis(labels = function(icd10_af1_d1_names) stringr::str_trunc(icd10_af1_d1_names, 12)) %>%
+  #ax_labels(stringr::str_trunc(icd10_af1_d1_names, 12)) %>%
+  ax_yaxis(
+    decimalsInFloat = 0,
+    title = list(text = "Số lượt chẩn đoán"),
+    labels = list(
+      formatter = format_num("~s"),
+      minWidth = 40)) %>% 
+  ax_yaxis2(
+    opposite = TRUE,
+    decimalsInFloat = 2,
+    title = list(text = "Tổng Doanh thu")) %>%
+  ax_labs(title = "Biểu đồ phân tích Doanh thu trên tổng số lượt chẩn đoán của mỗi nhóm bệnh",
+          subtitle = "Đơn vị: Triệu VNĐ") %>%
+  ax_title(
+    style = list(fontSize = "14px")) %>% 
+  ax_subtitle(
+    style = list(fontSize = "12px", color = "#BDBDBD"))
+
+p1
+```
+
+
+#### **12. Biểu đồ phân tích tổng thu nhập của Viện theo chẩn đoán bệnh (phân nhóm bệnh tật)**
+
+#### *12.1. Biểu đồ phân tích tổng thu nhập của Viện theo chẩn đoán bệnh (phân nhóm bệnh tật)*
+```{r, echo=FALSE}
+dta2_paid4_af1_d2 <- dta2_paid4 %>%
+  group_by(icd10_d2_names) %>%
+  summarise(costs = sum(cost)) %>%
+  arrange(desc(costs))
+
+apex(dta2_paid4_af1_d2, type = "bar", aes(icd10_d2_names, costs), serie_name = "Tổng thu", height = 2800) %>%
+  ax_colors("#225ea8") %>%
+  ax_labs("Biểu đồ phân tích tổng thu của viện theo chẩn đoán bệnh (phân nhóm bệnh tật)") %>%
+  ax_xaxis(labels = list(formatter = format_num("~s")))
+```
+
+
+#### *12.2. Biểu đồ phân tích tổng thu nhập của Viện theo từng nhóm bệnh thuộc "Bệnh hệ tiêu hoá"*
+
+```{r, echo=FALSE}
+### Biểu đồ tổng thu theo từng nhóm bệnh tật
+
+dta2_paid4_af1_d2g0 <- dta2_paid4 %>%
+  group_by(icd10_d1_names, icd10_d2_names) %>%
+  summarise(costs = sum(cost)) %>%
+  arrange(desc(costs))
+
+dta2_paid4_af1_d2g0i <- dta2_paid4 %>%
+  group_by(icd10_d1_names, icd10_d3_names) %>%
+  summarise(costs = sum(cost)) %>%
+  arrange(desc(costs))
+
+# Chương: Bệnh hệ tiêu hoá
+
+dta2_paid4_af1_d2g1 <- dta2_paid4_af1_d2g0 %>%
+  filter(icd10_d1_names == "Bệnh hệ tiêu hoá")
+
+apex(dta2_paid4_af1_d2g1, type = "bar", aes(icd10_d2_names, costs), serie_name = "Tổng thu") %>%
+  ax_colors("#225ea8") %>%
+  ax_labs("Biểu đồ phân tích tổng thu của viện theo chẩn đoán nhóm bệnh - Chương: Bệnh hệ tiêu hoá") %>%
+  ax_xaxis(labels = list(formatter = format_num("~s")))
+
+dta2_paid4_af1_d2g1i <- dta2_paid4_af1_d2g0i %>%
+  filter(icd10_d1_names == "Bệnh hệ tiêu hoá")
+
+apex(dta2_paid4_af1_d2g1i, type = "bar", aes(icd10_d3_names, costs), serie_name = "Tổng thu", height = 1200) %>%
+  ax_colors("#225ea8") %>%
+  ax_labs("Biểu đồ phân tích tổng thu của viện theo chẩn đoán loại bệnh - Chương: Bệnh hệ tiêu hoá") %>%
+  ax_xaxis(labels = list(formatter = format_num("~s")))
+```
+
+
+#### *12.3. Biểu đồ phân tích tổng thu nhập của Viện theo từng nhóm bệnh thuộc "Các yếu tố liên quan đến tình trạng sức khỏe và tiếp cận dịch vụ y tế"*
+
+```{r, echo=FALSE}
+# Chương: Các yếu tố liên quan đến tình trạng sức khỏe và tiếp cận dịch vụ y tế
+
+dta2_paid4_af1_d2g2 <- dta2_paid4_af1_d2g0 %>%
+  filter(icd10_d1_names == "Các yếu tố liên quan đến tình trạng sức khỏe và tiếp cận dịch vụ y tế")
+
+apex(dta2_paid4_af1_d2g2, type = "bar", aes(icd10_d2_names, costs), serie_name = "Tổng thu") %>%
+  ax_colors("#225ea8") %>%
+  ax_labs("Biểu đồ phân tích tổng thu của viện theo chẩn đoán nhóm bệnh - Chương: Các yếu tố liên quan đến tình trạng sức khỏe và tiếp cận dịch vụ y tế") %>%
+  ax_xaxis(labels = list(formatter = format_num("~s")))
+
+dta2_paid4_af1_d2g2i <- dta2_paid4_af1_d2g0i %>%
+  filter(icd10_d1_names == "Các yếu tố liên quan đến tình trạng sức khỏe và tiếp cận dịch vụ y tế")
+
+apex(dta2_paid4_af1_d2g2i, type = "bar", aes(icd10_d3_names, costs), serie_name = "Tổng thu", height = 1200) %>%
+  ax_colors("#225ea8") %>%
+  ax_labs("Biểu đồ phân tích tổng thu của viện theo chẩn đoán loại bệnh - Chương: Các yếu tố liên quan đến tình trạng sức khỏe và tiếp cận dịch vụ y tế") %>%
+  ax_xaxis(labels = list(formatter = format_num("~s")))
+```
+
+
+#### *12.4. Biểu đồ phân tích tổng thu nhập của Viện theo từng nhóm bệnh thuộc "Bệnh hệ cơ, xương, khớp và mô liên kết"*
+
+```{r, echo=FALSE}
+# Chương: Bệnh hệ cơ, xương, khớp và mô liên kết
+
+dta2_paid4_af1_d2g3 <- dta2_paid4_af1_d2g0 %>%
+  filter(icd10_d1_names == "Bệnh hệ cơ, xương, khớp và mô liên kết")
+
+apex(dta2_paid4_af1_d2g3, type = "bar", aes(icd10_d2_names, costs), serie_name = "Tổng thu") %>%
+  ax_colors("#225ea8") %>%
+  ax_labs("Biểu đồ phân tích tổng thu của viện theo chẩn đoán nhóm bệnh - Chương: Bệnh hệ cơ, xương, khớp và mô liên kết") %>%
+  ax_xaxis(labels = list(formatter = format_num("~s")))
+
+dta2_paid4_af1_d2g3i <- dta2_paid4_af1_d2g0i %>%
+  filter(icd10_d1_names == "Bệnh hệ tiêu hoá")
+
+apex(dta2_paid4_af1_d2g3i, type = "bar", aes(icd10_d3_names, costs), serie_name = "Tổng thu", height = 1200) %>%
+  ax_colors("#225ea8") %>%
+  ax_labs("Biểu đồ phân tích tổng thu của viện theo chẩn đoán loại bệnh - Chương: Bệnh hệ cơ, xương, khớp và mô liên kết") %>%
+  ax_xaxis(labels = list(formatter = format_num("~s")))
+```
+
+
+
+#### *12.5. Biểu đồ phân tích tổng thu nhập của Viện theo từng nhóm bệnh thuộc "Bệnh hệ hô hấp"*
+
+```{r, echo=FALSE}
+# Chương: Bệnh hệ hô hấp
+
+dta2_paid4_af1_d2g4 <- dta2_paid4_af1_d2g0 %>%
+  filter(icd10_d1_names == "Bệnh hệ hô hấp")
+
+apex(dta2_paid4_af1_d2g4, type = "bar", aes(icd10_d2_names, costs), serie_name = "Tổng thu") %>%
+  ax_colors("#225ea8") %>%
+  ax_labs("Biểu đồ phân tích tổng thu của viện theo chẩn đoán nhóm bệnh - Chương: Bệnh hệ hô hấp") %>%
+  ax_xaxis(labels = list(formatter = format_num("~s")))
+
+dta2_paid4_af1_d2g4i <- dta2_paid4_af1_d2g0i %>%
+  filter(icd10_d1_names == "Bệnh hệ hô hấp")
+
+apex(dta2_paid4_af1_d2g4i, type = "bar", aes(icd10_d3_names, costs), serie_name = "Tổng thu", height = 1200) %>%
+  ax_colors("#225ea8") %>%
+  ax_labs("Biểu đồ phân tích tổng thu của viện theo chẩn đoán loại bệnh - Chương: Bệnh hệ hô hấp") %>%
+  ax_xaxis(labels = list(formatter = format_num("~s")))
+```
+
+
+#### *12.6. Biểu đồ phân tích tổng thu nhập của Viện theo từng nhóm bệnh thuộc "Bệnh nội tiết, dinh dưỡng và chuyển hoá"*
+
+```{r, echo=FALSE}
+# Chương: Bệnh nội tiết, dinh dưỡng và chuyển hoá
+
+dta2_paid4_af1_d2g5 <- dta2_paid4_af1_d2g0 %>%
+  filter(icd10_d1_names == "Bệnh nội tiết, dinh dưỡng và chuyển hoá")
+
+apex(dta2_paid4_af1_d2g5, type = "bar", aes(icd10_d2_names, costs), serie_name = "Tổng thu") %>%
+  ax_colors("#225ea8") %>%
+  ax_labs("Biểu đồ phân tích tổng thu của viện theo chẩn đoán nhóm bệnh - Chương: Bệnh nội tiết, dinh dưỡng và chuyển hoá") %>%
+  ax_xaxis(labels = list(formatter = format_num("~s")))
+
+dta2_paid4_af1_d2g5i <- dta2_paid4_af1_d2g0i %>%
+  filter(icd10_d1_names == "Bệnh nội tiết, dinh dưỡng và chuyển hoá")
+
+apex(dta2_paid4_af1_d2g5i, type = "bar", aes(icd10_d3_names, costs), serie_name = "Tổng thu", height = 1200) %>%
+  ax_colors("#225ea8") %>%
+  ax_labs("Biểu đồ phân tích tổng thu của viện theo chẩn đoán loại bệnh - Chương: Bệnh nội tiết, dinh dưỡng và chuyển hoá") %>%
+  ax_xaxis(labels = list(formatter = format_num("~s")))
+```
+
+
+#### *12.7. Biểu đồ phân tích tổng thu nhập của Viện theo từng nhóm bệnh thuộc "U tân sinh"*
+
+```{r, echo=FALSE}
+# Chương: U tân sinh
+
+dta2_paid4_af1_d2g6 <- dta2_paid4_af1_d2g0 %>%
+  filter(icd10_d1_names == "U tân sinh")
+
+apex(dta2_paid4_af1_d2g6, type = "bar", aes(icd10_d2_names, costs), serie_name = "Tổng thu") %>%
+  ax_colors("#225ea8") %>%
+  ax_labs("Biểu đồ phân tích tổng thu của viện theo chẩn đoán nhóm bệnh - Chương: U tân sinh") %>%
+  ax_xaxis(labels = list(formatter = format_num("~s")))
+
+dta2_paid4_af1_d2g6i <- dta2_paid4_af1_d2g0i %>%
+  filter(icd10_d1_names == "U tân sinh")
+
+apex(dta2_paid4_af1_d2g6i, type = "bar", aes(icd10_d3_names, costs), serie_name = "Tổng thu", height = 2000) %>%
+  ax_colors("#225ea8") %>%
+  ax_labs("Biểu đồ phân tích tổng thu của viện theo chẩn đoán loại bệnh - Chương: U tân sinh") %>%
+  ax_xaxis(labels = list(formatter = format_num("~s")))
+```
+
+
+#### *12.8. Biểu đồ phân tích tổng thu nhập của Viện theo từng nhóm bệnh thuộc "Bệnh hệ sinh dục, tiết niệu"*
+
+```{r, echo=FALSE}
+# Chương: Bệnh hệ sinh dục, tiết niệu
+
+dta2_paid4_af1_d2g7 <- dta2_paid4_af1_d2g0 %>%
+  filter(icd10_d1_names == "Bệnh hệ sinh dục, tiết niệu")
+
+apex(dta2_paid4_af1_d2g7, type = "bar", aes(icd10_d2_names, costs), serie_name = "Tổng thu") %>%
+  ax_colors("#225ea8") %>%
+  ax_labs("Biểu đồ phân tích tổng thu của viện theo chẩn đoán nhóm bệnh - Chương: Bệnh hệ sinh dục, tiết niệu") %>%
+  ax_xaxis(labels = list(formatter = format_num("~s")))
+
+dta2_paid4_af1_d2g7i <- dta2_paid4_af1_d2g0i %>%
+  filter(icd10_d1_names == "Bệnh hệ sinh dục, tiết niệu")
+
+apex(dta2_paid4_af1_d2g7i, type = "bar", aes(icd10_d3_names, costs), serie_name = "Tổng thu", height = 1200) %>%
+  ax_colors("#225ea8") %>%
+  ax_labs("Biểu đồ phân tích tổng thu của viện theo chẩn đoán loại bệnh - Chương: Bệnh hệ sinh dục, tiết niệu") %>%
+  ax_xaxis(labels = list(formatter = format_num("~s")))
+```
+
+
+
+#### *12.9. Biểu đồ phân tích tổng thu nhập của Viện theo từng nhóm bệnh thuộc "Bệnh hệ tuần hoàn"*
+
+```{r, echo=FALSE}
+# Chương: Bệnh hệ tuần hoàn
+
+dta2_paid4_af1_d2g8 <- dta2_paid4_af1_d2g0 %>%
+  filter(icd10_d1_names == "Bệnh hệ tuần hoàn")
+
+apex(dta2_paid4_af1_d2g8, type = "bar", aes(icd10_d2_names, costs), serie_name = "Tổng thu") %>%
+  ax_colors("#225ea8") %>%
+  ax_labs("Biểu đồ phân tích tổng thu của viện theo chẩn đoán nhóm bệnh - Chương: Bệnh hệ tuần hoàn") %>%
+  ax_xaxis(labels = list(formatter = format_num("~s")))
+
+dta2_paid4_af1_d2g8i <- dta2_paid4_af1_d2g0i %>%
+  filter(icd10_d1_names == "Bệnh hệ tuần hoàn")
+
+apex(dta2_paid4_af1_d2g8i, type = "bar", aes(icd10_d3_names, costs), serie_name = "Tổng thu", height = 1200) %>%
+  ax_colors("#225ea8") %>%
+  ax_labs("Biểu đồ phân tích tổng thu của viện theo chẩn đoán loại bệnh - Chương: Bệnh hệ tuần hoàn") %>%
+  ax_xaxis(labels = list(formatter = format_num("~s")))
+```
+
+
+#### *12.10. Biểu đồ phân tích tổng thu nhập của Viện theo từng nhóm bệnh thuộc "Các triệu chứng và bất thường về lâm sàng, cận lâm sàng không phân loại nơi khác"*
+
+```{r, echo=FALSE}
+# Chương: Các triệu chứng và bất thường về lâm sàng, cận lâm sàng không phân loại nơi khác
+
+dta2_paid4_af1_d2g9 <- dta2_paid4_af1_d2g0 %>%
+  filter(icd10_d1_names == "Các triệu chứng và bất thường về lâm sàng, cận lâm sàng không phân loại nơi khác")
+
+apex(dta2_paid4_af1_d2g9, type = "bar", aes(icd10_d2_names, costs), serie_name = "Tổng thu") %>%
+  ax_colors("#225ea8") %>%
+  ax_labs("Biểu đồ phân tích tổng thu của viện theo chẩn đoán nhóm bệnh - Chương: Các triệu chứng và bất thường về lâm sàng, cận lâm sàng không phân loại nơi khác") %>%
+  ax_xaxis(labels = list(formatter = format_num("~s")))
+
+dta2_paid4_af1_d2g9i <- dta2_paid4_af1_d2g0i %>%
+  filter(icd10_d1_names == "Các triệu chứng và bất thường về lâm sàng, cận lâm sàng không phân loại nơi khác")
+
+apex(dta2_paid4_af1_d2g9i, type = "bar", aes(icd10_d3_names, costs), serie_name = "Tổng thu", height = 1200) %>%
+  ax_colors("#225ea8") %>%
+  ax_labs("Biểu đồ phân tích tổng thu của viện theo chẩn đoán loại bệnh - Chương: Các triệu chứng và bất thường về lâm sàng, cận lâm sàng không phân loại nơi khác") %>%
+  ax_xaxis(labels = list(formatter = format_num("~s")))
+```
+
+
+
+#### *12.11. Biểu đồ phân tích tổng thu nhập của Viện theo từng nhóm bệnh thuộc "Bệnh hệ thần kinh"*
+
+```{r, echo=FALSE}
+# Chương: Bệnh hệ thần kinh
+
+dta2_paid4_af1_d2g10 <- dta2_paid4_af1_d2g0 %>%
+  filter(icd10_d1_names == "Bệnh hệ thần kinh")
+
+apex(dta2_paid4_af1_d2g10, type = "bar", aes(icd10_d2_names, costs), serie_name = "Tổng thu") %>%
+  ax_colors("#225ea8") %>%
+  ax_labs("Biểu đồ phân tích tổng thu của viện theo chẩn đoán nhóm bệnh - Chương: Bệnh hệ thần kinh") %>%
+  ax_xaxis(labels = list(formatter = format_num("~s")))
+
+dta2_paid4_af1_d2g10i <- dta2_paid4_af1_d2g0i %>%
+  filter(icd10_d1_names == "Bệnh hệ thần kinh")
+
+apex(dta2_paid4_af1_d2g10i, type = "bar", aes(icd10_d3_names, costs), serie_name = "Tổng thu", height = 1200) %>%
+  ax_colors("#225ea8") %>%
+  ax_labs("Biểu đồ phân tích tổng thu của viện theo chẩn đoán loại bệnh - Chương: Bệnh hệ thần kinh") %>%
+  ax_xaxis(labels = list(formatter = format_num("~s")))
+```
+
+
+#### *12.12. Biểu đồ phân tích tổng thu nhập của Viện theo từng nhóm bệnh thuộc "Bệnh nhiễm trùng và ký sinh trùng"*
+```{r, echo=FALSE}
+# Chương: Bệnh nhiễm trùng và ký sinh trùng
+
+dta2_paid4_af1_d2g11 <- dta2_paid4_af1_d2g0 %>%
+  filter(icd10_d1_names == "Bệnh nhiễm trùng và ký sinh trùng")
+
+apex(dta2_paid4_af1_d2g11, type = "bar", aes(icd10_d2_names, costs), serie_name = "Tổng thu") %>%
+  ax_colors("#225ea8") %>%
+  ax_labs("Biểu đồ phân tích tổng thu của viện theo chẩn đoán nhóm bệnh - Chương: Bệnh nhiễm trùng và ký sinh trùng") %>%
+  ax_xaxis(labels = list(formatter = format_num("~s")))
+
+dta2_paid4_af1_d2g11i <- dta2_paid4_af1_d2g0i %>%
+  filter(icd10_d1_names == "Bệnh nhiễm trùng và ký sinh trùng")
+
+apex(dta2_paid4_af1_d2g11i, type = "bar", aes(icd10_d3_names, costs), serie_name = "Tổng thu", height = 1200) %>%
+  ax_colors("#225ea8") %>%
+  ax_labs("Biểu đồ phân tích tổng thu của viện theo chẩn đoán loại bệnh - Chương: Bệnh nhiễm trùng và ký sinh trùng") %>%
+  ax_xaxis(labels = list(formatter = format_num("~s")))
+```
+
+
+
+#### *12.13. Biểu đồ phân tích tổng thu nhập của Viện theo từng nhóm bệnh thuộc "Bệnh tai và xương chũm"*
+```{r, echo=FALSE}
+# Chương: Bệnh tai và xương chũm
+
+dta2_paid4_af1_d2g12 <- dta2_paid4_af1_d2g0 %>%
+  filter(icd10_d1_names == "Bệnh tai và xương chũm")
+
+apex(dta2_paid4_af1_d2g12, type = "bar", aes(icd10_d2_names, costs), serie_name = "Tổng thu") %>%
+  ax_colors("#225ea8") %>%
+  ax_labs("Biểu đồ phân tích tổng thu của viện theo chẩn đoán nhóm bệnh - Chương: Bệnh tai và xương chũm") %>%
+  ax_xaxis(labels = list(formatter = format_num("~s")))
+
+dta2_paid4_af1_d2g12i <- dta2_paid4_af1_d2g0i %>%
+  filter(icd10_d1_names == "Bệnh tai và xương chũm")
+
+apex(dta2_paid4_af1_d2g12i, type = "bar", aes(icd10_d3_names, costs), serie_name = "Tổng thu", height = 1200) %>%
+  ax_colors("#225ea8") %>%
+  ax_labs("Biểu đồ phân tích tổng thu của viện theo chẩn đoán loại bệnh - Chương: Bệnh tai và xương chũm") %>%
+  ax_xaxis(labels = list(formatter = format_num("~s")))
+```
+
+
+
+#### *12.14. Biểu đồ phân tích tổng thu nhập của Viện theo từng nhóm bệnh thuộc "Rối loạn tâm thần và hành vi"*
+```{r, echo=FALSE}
+# Chương: Rối loạn tâm thần và hành vi
+
+dta2_paid4_af1_d2g13 <- dta2_paid4_af1_d2g0 %>%
+  filter(icd10_d1_names == "Rối loạn tâm thần và hành vi")
+
+apex(dta2_paid4_af1_d2g13, type = "bar", aes(icd10_d2_names, costs), serie_name = "Tổng thu") %>%
+  ax_colors("#225ea8") %>%
+  ax_labs("Biểu đồ phân tích tổng thu của viện theo chẩn đoán nhóm bệnh - Chương: Rối loạn tâm thần và hành vi") %>%
+  ax_xaxis(labels = list(formatter = format_num("~s")))
+
+dta2_paid4_af1_d2g13i <- dta2_paid4_af1_d2g0i %>%
+  filter(icd10_d1_names == "Rối loạn tâm thần và hành vi")
+
+apex(dta2_paid4_af1_d2g13i, type = "bar", aes(icd10_d3_names, costs), serie_name = "Tổng thu", height = 1200) %>%
+  ax_colors("#225ea8") %>%
+  ax_labs("Biểu đồ phân tích tổng thu của viện theo chẩn đoán loại bệnh - Chương: Rối loạn tâm thần và hành vi") %>%
+  ax_xaxis(labels = list(formatter = format_num("~s")))
+```
+
+
+#### *12.15. Biểu đồ phân tích tổng thu nhập của Viện theo từng nhóm bệnh thuộc "Bệnh mắt và phần phụ"*
+```{r, echo=FALSE}
+# Chương: Bệnh mắt và phần phụ
+
+dta2_paid4_af1_d2g14 <- dta2_paid4_af1_d2g0 %>%
+  filter(icd10_d1_names == "Bệnh mắt và phần phụ")
+
+apex(dta2_paid4_af1_d2g14, type = "bar", aes(icd10_d2_names, costs), serie_name = "Tổng thu") %>%
+  ax_colors("#225ea8") %>%
+  ax_labs("Biểu đồ phân tích tổng thu của viện theo chẩn đoán nhóm bệnh - Chương: Bệnh mắt và phần phụ") %>%
+  ax_xaxis(labels = list(formatter = format_num("~s")))
+
+dta2_paid4_af1_d2g14i <- dta2_paid4_af1_d2g0i %>%
+  filter(icd10_d1_names == "Bệnh mắt và phần phụ")
+
+apex(dta2_paid4_af1_d2g14i, type = "bar", aes(icd10_d3_names, costs), serie_name = "Tổng thu", height = 1200) %>%
+  ax_colors("#225ea8") %>%
+  ax_labs("Biểu đồ phân tích tổng thu của viện theo chẩn đoán loại bệnh - Chương: Bệnh mắt và phần phụ") %>%
+  ax_xaxis(labels = list(formatter = format_num("~s")))
+```
+
+
+#### *12.16. Biểu đồ phân tích tổng thu nhập của Viện theo từng nhóm bệnh thuộc "Bệnh da và tổ chức dưới da"*
+```{r, echo=FALSE}
+# Chương: Bệnh da và tổ chức dưới da
+
+dta2_paid4_af1_d2g15 <- dta2_paid4_af1_d2g0 %>%
+  filter(icd10_d1_names == "Bệnh da và tổ chức dưới da")
+
+apex(dta2_paid4_af1_d2g15, type = "bar", aes(icd10_d2_names, costs), serie_name = "Tổng thu") %>%
+  ax_colors("#225ea8") %>%
+  ax_labs("Biểu đồ phân tích tổng thu của viện theo chẩn đoán nhóm bệnh - Chương: Bệnh da và tổ chức dưới da") %>%
+  ax_xaxis(labels = list(formatter = format_num("~s")))
+
+dta2_paid4_af1_d2g15i <- dta2_paid4_af1_d2g0i %>%
+  filter(icd10_d1_names == "Bệnh da và tổ chức dưới da")
+
+apex(dta2_paid4_af1_d2g15i, type = "bar", aes(icd10_d3_names, costs), serie_name = "Tổng thu", height = 1200) %>%
+  ax_colors("#225ea8") %>%
+  ax_labs("Biểu đồ phân tích tổng thu của viện theo chẩn đoán loại bệnh - Chương: Bệnh da và tổ chức dưới da") %>%
+  ax_xaxis(labels = list(formatter = format_num("~s")))
+```
+
+
+#### *12.17. Biểu đồ phân tích tổng thu nhập của Viện theo từng nhóm bệnh thuộc "Vết thương, ngộ độc và hậu quả của một số nguyên nhân từ bên ngoài"*
+```{r, echo=FALSE}
+# Chương: Vết thương, ngộ độc và hậu quả của một số nguyên nhân từ bên ngoài
+
+dta2_paid4_af1_d2g16 <- dta2_paid4_af1_d2g0 %>%
+  filter(icd10_d1_names == "Vết thương, ngộ độc và hậu quả của một số nguyên nhân từ bên ngoài")
+
+apex(dta2_paid4_af1_d2g16, type = "bar", aes(icd10_d2_names, costs), serie_name = "Tổng thu") %>%
+  ax_colors("#225ea8") %>%
+  ax_labs("Biểu đồ phân tích tổng thu của viện theo chẩn đoán nhóm bệnh - Chương: Vết thương, ngộ độc và hậu quả của một số nguyên nhân từ bên ngoài") %>%
+  ax_xaxis(labels = list(formatter = format_num("~s")))
+
+dta2_paid4_af1_d2g16i <- dta2_paid4_af1_d2g0i %>%
+  filter(icd10_d1_names == "Vết thương, ngộ độc và hậu quả của một số nguyên nhân từ bên ngoài")
+
+apex(dta2_paid4_af1_d2g16i, type = "bar", aes(icd10_d3_names, costs), serie_name = "Tổng thu", height = 2000) %>%
+  ax_colors("#225ea8") %>%
+  ax_labs("Biểu đồ phân tích tổng thu của viện theo chẩn đoán loại bệnh - Chương: Vết thương, ngộ độc và hậu quả của một số nguyên nhân từ bên ngoài") %>%
+  ax_xaxis(labels = list(formatter = format_num("~s")))
+```
+
+
+
+#### *12.18. Biểu đồ phân tích tổng thu nhập của Viện theo từng nhóm bệnh thuộc "Bệnh máu, cơ quan tạo máu và các bệnh lý liên quan đến cơ chế miễn dịch"*
+```{r, echo=FALSE}
+# Chương: Bệnh máu, cơ quan tạo máu và các bệnh lý liên quan đến cơ chế miễn dịch
+
+dta2_paid4_af1_d2g17 <- dta2_paid4_af1_d2g0 %>%
+  filter(icd10_d1_names == "Bệnh máu, cơ quan tạo máu và các bệnh lý liên quan đến cơ chế miễn dịch")
+
+apex(dta2_paid4_af1_d2g17, type = "bar", aes(icd10_d2_names, costs), serie_name = "Tổng thu") %>%
+  ax_colors("#225ea8") %>%
+  ax_labs("Biểu đồ phân tích tổng thu của viện theo chẩn đoán nhóm bệnh - Chương: Bệnh máu, cơ quan tạo máu và các bệnh lý liên quan đến cơ chế miễn dịch") %>%
+  ax_xaxis(labels = list(formatter = format_num("~s")))
+
+dta2_paid4_af1_d2g17i <- dta2_paid4_af1_d2g0i %>%
+  filter(icd10_d1_names == "Bệnh máu, cơ quan tạo máu và các bệnh lý liên quan đến cơ chế miễn dịch")
+
+apex(dta2_paid4_af1_d2g17i, type = "bar", aes(icd10_d3_names, costs), serie_name = "Tổng thu", height = 1200) %>%
+  ax_colors("#225ea8") %>%
+  ax_labs("Biểu đồ phân tích tổng thu của viện theo chẩn đoán loại bệnh - Chương: Bệnh máu, cơ quan tạo máu và các bệnh lý liên quan đến cơ chế miễn dịch") %>%
+  ax_xaxis(labels = list(formatter = format_num("~s")))
+```
+
+
+
+#### *12.19. Biểu đồ phân tích tổng thu nhập của Viện theo từng nhóm bệnh thuộc "Dị tật bẩm sinh, biến dạng và bất thường về nhiễm sắc thể"*
+```{r, echo=FALSE}
+# Chương: Dị tật bẩm sinh, biến dạng và bất thường về nhiễm sắc thể
+
+dta2_paid4_af1_d2g18 <- dta2_paid4_af1_d2g0 %>%
+  filter(icd10_d1_names == "Dị tật bẩm sinh, biến dạng và bất thường về nhiễm sắc thể")
+
+apex(dta2_paid4_af1_d2g18, type = "bar", aes(icd10_d2_names, costs), serie_name = "Tổng thu") %>%
+  ax_colors("#225ea8") %>%
+  ax_labs("Biểu đồ phân tích tổng thu của viện theo chẩn đoán nhóm bệnh - Chương: Dị tật bẩm sinh, biến dạng và bất thường về nhiễm sắc thể") %>%
+  ax_xaxis(labels = list(formatter = format_num("~s")))
+
+dta2_paid4_af1_d2g18i <- dta2_paid4_af1_d2g0i %>%
+  filter(icd10_d1_names == "Dị tật bẩm sinh, biến dạng và bất thường về nhiễm sắc thể")
+
+apex(dta2_paid4_af1_d2g18i, type = "bar", aes(icd10_d3_names, costs), serie_name = "Tổng thu", height = 1200) %>%
+  ax_colors("#225ea8") %>%
+  ax_labs("Biểu đồ phân tích tổng thu của viện theo chẩn đoán loại bệnh - Chương: Dị tật bẩm sinh, biến dạng và bất thường về nhiễm sắc thể") %>%
+  ax_xaxis(labels = list(formatter = format_num("~s")))
+```
+
+
+#### *12.20. Biểu đồ phân tích tổng thu nhập của Viện theo từng nhóm bệnh thuộc "Mang thai, sinh đẻ và hậu sản"*
+```{r, echo=FALSE}
+# Chương: Mang thai, sinh đẻ và hậu sản
+
+dta2_paid4_af1_d2g19 <- dta2_paid4_af1_d2g0 %>%
+  filter(icd10_d1_names == "Mang thai, sinh đẻ và hậu sản")
+
+apex(dta2_paid4_af1_d2g19, type = "bar", aes(icd10_d2_names, costs), serie_name = "Tổng thu") %>%
+  ax_colors("#225ea8") %>%
+  ax_labs("Biểu đồ phân tích tổng thu của viện theo chẩn đoán nhóm bệnh - Chương: Mang thai, sinh đẻ và hậu sản") %>%
+  ax_xaxis(labels = list(formatter = format_num("~s")))
+
+dta2_paid4_af1_d2g19i <- dta2_paid4_af1_d2g0i %>%
+  filter(icd10_d1_names == "Mang thai, sinh đẻ và hậu sản")
+
+apex(dta2_paid4_af1_d2g19i, type = "bar", aes(icd10_d3_names, costs), serie_name = "Tổng thu", height = 800) %>%
+  ax_colors("#225ea8") %>%
+  ax_labs("Biểu đồ phân tích tổng thu của viện theo chẩn đoán loại bệnh - Chương: Mang thai, sinh đẻ và hậu sản") %>%
+  ax_xaxis(labels = list(formatter = format_num("~s")))
+```
+
+
+#### *12.21. Biểu đồ phân tích tổng thu nhập của Viện theo từng nhóm bệnh thuộc "Các nguyên nhân từ bên ngoài của bệnh tật và tử vong"*
+```{r, echo=FALSE}
+# Chương: Các nguyên nhân từ bên ngoài của bệnh tật và tử vong
+
+dta2_paid4_af1_d2g20 <- dta2_paid4_af1_d2g0 %>%
+  filter(icd10_d1_names == "Các nguyên nhân từ bên ngoài của bệnh tật và tử vong")
+
+apex(dta2_paid4_af1_d2g20, type = "bar", aes(icd10_d2_names, costs), serie_name = "Tổng thu") %>%
+  ax_colors("#225ea8") %>%
+  ax_labs("Biểu đồ phân tích tổng thu của viện theo chẩn đoán nhóm bệnh - Chương: Các nguyên nhân từ bên ngoài của bệnh tật và tử vong") %>%
+  ax_xaxis(labels = list(formatter = format_num("~s")))
+
+dta2_paid4_af1_d2g20i <- dta2_paid4_af1_d2g0i %>%
+  filter(icd10_d1_names == "Các nguyên nhân từ bên ngoài của bệnh tật và tử vong")
+
+apex(dta2_paid4_af1_d2g20i, type = "bar", aes(icd10_d3_names, costs), serie_name = "Tổng thu", height = 800) %>%
+  ax_colors("#225ea8") %>%
+  ax_labs("Biểu đồ phân tích tổng thu của viện theo chẩn đoán loại bệnh - Chương: Các nguyên nhân từ bên ngoài của bệnh tật và tử vong") %>%
+  ax_xaxis(labels = list(formatter = format_num("~s")))
+```
+
+
+#### *12.22. Biểu đồ phân tích tổng thu nhập của Viện theo từng nhóm bệnh thuộc "Một số bệnh lý khởi phát trong thời kỳ chu sinh"*
+```{r, echo=FALSE}
+# Chương: Một số bệnh lý khởi phát trong thời kỳ chu sinh
+
+dta2_paid4_af1_d2g21 <- dta2_paid4_af1_d2g0 %>%
+  filter(icd10_d1_names == "Một số bệnh lý khởi phát trong thời kỳ chu sinh")
+
+apex(dta2_paid4_af1_d2g21, type = "bar", aes(icd10_d2_names, costs), serie_name = "Tổng thu") %>%
+  ax_colors("#225ea8") %>%
+  ax_labs("Biểu đồ phân tích tổng thu của viện theo chẩn đoán nhóm bệnh - Chương: Một số bệnh lý khởi phát trong thời kỳ chu sinh") %>%
+  ax_xaxis(labels = list(formatter = format_num("~s")))
+
+dta2_paid4_af1_d2g21i <- dta2_paid4_af1_d2g0i %>%
+  filter(icd10_d1_names == "Một số bệnh lý khởi phát trong thời kỳ chu sinh")
+
+apex(dta2_paid4_af1_d2g21i, type = "bar", aes(icd10_d3_names, costs), serie_name = "Tổng thu", height = 800) %>%
+  ax_colors("#225ea8") %>%
+  ax_labs("Biểu đồ phân tích tổng thu của viện theo chẩn đoán loại bệnh - Chương: Một số bệnh lý khởi phát trong thời kỳ chu sinh") %>%
+  ax_xaxis(labels = list(formatter = format_num("~s")))
+```
+
+
+
+#### *12.23. Biểu đồ phân tích tổng thu nhập của Viện theo từng nhóm bệnh thuộc "Mã dành cho những mục đích đặc biệt"*
+```{r, echo=FALSE}
+# Chương: Mã dành cho những mục đích đặc biệt
+
+dta2_paid4_af1_d2g22 <- dta2_paid4_af1_d2g0 %>%
+  filter(icd10_d1_names == "Mã dành cho những mục đích đặc biệt")
+
+apex(dta2_paid4_af1_d2g22, type = "bar", aes(icd10_d2_names, costs), serie_name = "Tổng thu") %>%
+  ax_colors("#225ea8") %>%
+  ax_labs("Biểu đồ phân tích tổng thu của viện theo chẩn đoán nhóm bệnh - Chương: Mã dành cho những mục đích đặc biệt") %>%
+  ax_xaxis(labels = list(formatter = format_num("~s")))
+
+dta2_paid4_af1_d2g22i <- dta2_paid4_af1_d2g0i %>%
+  filter(icd10_d1_names == "Mã dành cho những mục đích đặc biệt")
+
+apex(dta2_paid4_af1_d2g22i, type = "bar", aes(icd10_d3_names, costs), serie_name = "Tổng thu", height = 800) %>%
+  ax_colors("#225ea8") %>%
+  ax_labs("Biểu đồ phân tích tổng thu của viện theo chẩn đoán loại bệnh - Chương: Mã dành cho những mục đích đặc biệt") %>%
+  ax_xaxis(labels = list(formatter = format_num("~s")))
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

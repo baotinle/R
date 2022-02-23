@@ -1,0 +1,363 @@
+---
+title: "Report"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+<p style="font-size:110%;text-align:justify;"> Dữ liệu là thông tin user khi biết đến app và web, không bao gồm user được tạo từ HIS hay bao gồm thông tin của thành viên gia đình tính từ tháng 7.2021 đến hết tháng 10.2021.<p>
+<p style="font-size:110%;text-align:justify;"> Thông tin về những người này có khả quan và phù hợp để khoanhh vùng quảng cáo do những người này là biết đến app và chủ động tạo tài khoản.<p>
+
+```{r setup, include=FALSE}
+#### Call package
+library(readxl)
+library(ggplot2)
+library(plotly)
+library(dplyr)
+library(stringr)
+library(DT)
+library(forcats)
+library(tidyr)
+
+user <- read_excel("ISC-DA user_export-7.2021.xlsx", sheet = "Profile",
+                   col_types = c("text", "text", "text", "text", "text",
+                                    "date", "date", "text", "text", "text",
+                                    "text", "text", "text", "text"))
+
+user1<- user %>%
+  mutate(province = replace_na(province, "Không điền")) %>%
+  mutate(district = replace_na(district, "Không điền")) %>%
+  mutate(gender = replace_na(gender, "Không điền")) %>%
+  mutate(job = replace_na(job, "Không điền"))
+
+user1$district <- gsub("^\\d+$", "Không điền", user1$district)
+user1$province <- gsub("^\\d+$", "Không điền", user1$province)
+user1$gender <- gsub("^\\d+$", "Không điền", user1$gender)
+user1$job <- gsub("^\\d+$", "Không điền", user1$job)
+
+```
+#### **1. Tỉ lệ profile theo tỉnh**
+
+##### **1.1. Biều đồ số lượng profile theo tỉnh**
+```{r, echo=FALSE}
+tinh<- data.frame(table(user1$province)) %>%
+  mutate(sum = length(user1$province)) %>%
+  mutate(rate = round(as.numeric(Freq/sum*100), 3)) %>%
+  arrange(desc(Freq))
+
+
+gg1<- tinh %>%
+  arrange(desc(Freq)) %>%
+  filter(Var1 != "Không điền") %>%
+  mutate(Var1 = fct_reorder(Var1, Freq)) %>%
+  mutate(text = paste("Tỉnh: ", Var1,
+                      "\nSố lượng profile: ", Freq, sep="")) %>%
+  ggplot(aes(x=Var1, y=Freq, text = text)) +
+  geom_bar(aes(fill = Freq), stat="identity") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle=315, vjust=0.5, hjust = 0.5, size = 8))+
+  scale_fill_distiller(palette = "Spectral", name = "Số lượng profile") +
+  scale_y_continuous(labels = scales::label_number_si()) +
+  #scale_y_log10() +
+  xlab("") + ylab("")
+ggplotly(gg1, tooltip="text", width =1000)
+```
+<p style="font-size:110%;text-align:justify;"> Dựa vào biểu đồ và bảng số lượt đặt khám thì Hà Nội và Thành phố Hồ Chí Minh là 2 nơi có số lượng user nhiều nhất. Đây là hai vùng chịu ảnh hưởng khá cao từ Covid nên khả năng cao họ có nhu cầu đặt khám online?<p>
+<p style="font-size:110%;text-align:justify;"> Ta sẽ tách hai địa điểm Hà Nội và Thành phố Hồ Chí Minh và phân tích sâu đến quận, huyện để xem rõ phân phối của các tỉnh còn lại hơn.<p>
+
+
+##### **1.2. Biểu đồ số lượng profile theo tỉnh (sau khi tách Hà Nội và Hồ Chí Minh)**
+```{r, echo=FALSE}
+gg2<- tinh %>%
+  arrange(desc(Freq)) %>%
+  filter(Var1 != "Không điền") %>%
+  filter(Var1 != "Hà Nội" ) %>%
+  filter(Var1 != "Hồ Chí Minh" ) %>%
+  mutate(Var1 = fct_reorder(Var1, Freq)) %>%
+  mutate(text = paste("Tỉnh: ", Var1,
+                      "\nSố lượng profile: ", Freq, sep="")) %>%
+  ggplot(aes(x=Var1, y=Freq, text = text)) +
+  geom_bar(aes(fill = Freq), stat="identity") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle=315, vjust=0.5, hjust = 0.5, size = 8))+
+  scale_fill_distiller(palette = "Spectral", name = "Số lượng profile") +
+  scale_y_continuous(labels = scales::label_number_si()) +
+  #scale_y_log10() +
+  xlab("") + ylab("")
+ggplotly(gg2, tooltip="text", width =1000)
+```
+<p style="font-size:110%;text-align:justify;"> Sau khi tách đi 2 tỉnh có lượng profile cao là Hà Nội và Hồ Chí Minh. Các tỉnh có lượng user cao tập trung vào các tỉnh lân cận Hồ Chí Minh, những nơi có ảnh hưởng của dịch cao. Dựa vào biểu đồ ta có thể rút ra được kết luân là những nơi có ảnh hưởng bởi dịch thì những người ở đó có nhu cầu sử dụng app cao.<p>
+
+
+##### **1.3. Biểu đồ số lượng profile theo quận/huyện - Hà Nội**
+```{r, echo=FALSE}
+gg2<- user1 %>%
+  filter(province == "Hà Nội") %>%
+  group_by(district) %>%
+  summarise(count = length(district)) %>%
+  mutate(district = fct_reorder(district, count)) %>%
+  mutate(text = paste("Quận/Huyện: ", district,
+                      "\nSố lượng profile: ", count, sep="")) %>%
+  ggplot(aes(x=district, y=count, text = text)) +
+  geom_bar(aes(fill = count), stat="identity") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle=315, vjust=0.5, hjust = 0.5, size = 8))+
+  scale_fill_distiller(palette = "Spectral", name = "Số lượng profile") +
+  scale_y_continuous(labels = scales::label_number_si()) +
+  #scale_y_log10() +
+  xlab("") + ylab("")
+ggplotly(gg2, tooltip="text", width =1000)
+```
+<p style="font-size:110%;text-align:justify;"> Tại Hà Nội, tập trung vào 5 quận huyện (Hoàng Mai, Nam Từ Liêm, Cầu Giấy, Bắc Từ Liêm, Đống Đa, Hà Đông) là các quận huyện mà dịch đã diễn ra phức tạp và có mức giãn cách xã hội cao.
+Vì thế, người dân có xu hướng sử dụng app nhằm việc khám online thuận tiện hơn.<p>
+
+
+##### **1.4. Biểu đồ số lượng profile theo quận/huyện - Hồ Chí Minh**
+```{r, echo=FALSE}
+gg2<- user1 %>%
+  filter(province == "Hồ Chí Minh") %>%
+  group_by(district) %>%
+  summarise(count = length(district)) %>%
+  filter(district != "Không điền") %>%
+  mutate(district = fct_reorder(district, count)) %>%
+  mutate(text1 = paste("Quận/Huyện: ", district,
+                      "\nSố lượng profile: ", count, sep="")) %>%
+  ggplot(aes(x=district, y=count, text = text1)) +
+  geom_bar(aes(fill = count), stat="identity") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle=315, vjust=0.5, hjust = 0.5, size = 8))+
+  scale_fill_distiller(palette = "Spectral", name = "Số lượng profile") +
+  scale_y_continuous(labels = scales::label_number_si()) +
+  #scale_y_log10() +
+  xlab("") + ylab("")
+ggplotly(gg2, tooltip="text", width =1000)
+```
+<p style="font-size:110%;text-align:justify;"> Tại Hồ Chí Minh, số lượng user vẫn tập trung tại những khu vực có dịch cao.<p>
+<p style="font-size:110%;text-align:justify;"> <b>Câu hỏi đặt ra: </b> lượng người có nhu cầu sử dụng app cao tập trung vào khu vực có dịch lớn. Vậy target vào khu vực nào trong trường hợp dịch giảm bớt thì có khả quan? Cần làm gì để app thu hút người dùng ngay cả khi không có dịch? <p>
+
+
+##### **1.5. Bảng số lượng profile và tỉ lệ profile theo tỉnh**
+```{r, echo=FALSE}
+d1<- tinh %>%
+  select(Var1, Freq, rate)
+
+datatable(    
+    head(d1, 
+         nrow(d1), 
+         width = "auto"),
+    colnames = c("STT", "Tỉnh", "Số lượng profile", "Tỉ lệ (%)"),
+    filter = 'top')
+```
+<p style="font-size:110%;text-align:justify;"> Trên đây là bảng chi tiết danh sách tỉnh cùng số lượng profile và tỉ lệ profile. <p>
+
+#### **2. Phân bổ số lượng profile theo độ tuổi**
+```{r, echo=FALSE}
+gg2 <- user1  %>%
+  filter(!is.na(dateOfBirth)) %>%
+  mutate(year = format.Date(dateOfBirth, "%Y"),
+         year = as.numeric(year)) %>%
+  mutate(age = as.numeric(format.Date(Sys.Date(), "%Y")) - year) %>%
+  ggplot(aes(age, fill = age)) + 
+  geom_histogram(aes(y=..density.., fill=..density..), col="white", lwd = 0.5, bins = 64) +
+  geom_density(col="#54278f", size = 0.5) +
+  scale_fill_distiller(palette = "Spectral", name = "Mật độ") +
+  scale_x_continuous(labels = scales::label_number_si()) +
+  labs(title="") +
+  xlab("Độ tuổi") +
+  ylab("Mật độ") + 
+  theme(axis.text.x = element_text(angle=0, vjust=0.5)) +
+  theme_minimal()
+ggplotly(gg2, width = 1000)
+```
+<p style="font-size:110%;text-align:justify;"> Trên đây là biểu đồ mật độ phân phối số lượt đặt khám theo độ tuổi. Dựa vào biểu đồ ta thấy có những giá trị ngoại lai như 0 hay 122 tuổi, để có thể xem phân phối rõ hơn chúng ta sẽ tách những giá trị ngoại lai ra khỏi biểu đồ. <p>
+
+
+##### **2.1. Phân bổ số lượng profile theo độ tuổi (từ 15 đến 73)**
+```{r, echo=FALSE}
+gg3 <- user1  %>%
+  filter(!is.na(dateOfBirth)) %>%
+  mutate(year = format.Date(dateOfBirth, "%Y"),
+         year = as.numeric(year)) %>%
+  mutate(age = as.numeric(format.Date(Sys.Date(), "%Y")) - year) %>%
+  filter(age >= 15 & age <= 73) %>%
+  ggplot(aes(age, fill = age)) + 
+  geom_histogram(aes(y=..density.., fill=..density..), col="white", lwd = 0.5, bins = 59) +
+  geom_density(col="#54278f", size = 0.5) +
+  scale_fill_distiller(palette = "Spectral", name = "Mật độ") +
+  scale_x_continuous(labels = scales::label_number_si()) +
+  labs(title="") +
+  xlab("Độ tuổi") +
+  ylab("Mật độ") + 
+  theme(axis.text.x = element_text(angle=0, vjust=0.5)) +
+  theme_minimal()
+ggplotly(gg3, width = 1000)
+```
+<p style="font-size:110%;text-align:justify;"> Biểu đồ trên là biểu đồ loại bỏ các giá trị ngoại lai của biểu đồ phân phối tuổi tổng quát. Vì lứa tuổi dưới 15 tuổi thường không ra quyết định cũng như ít quan tâm về các ứng dụng về sức khỏ. Còn độ tuổi trên 73 tuổi cũng khá ít tiếp cận công nghệ, và độ tuổi này thị hiếu sẽ là chắc chắn và ít lựa chọn khám online. <p>
+<p style="font-size:110%;text-align:justify;"> Qua biểu đồ, ta có thể phân vùng 3 khoang tuổi như sau: <p>
+<ul>
+  <li style="font-size:110%;text-align:justify;"> Khoảng 1: Độ tuổi từ 23 đến 34 (có mật độ trên 0.03).</li>
+  <li style="font-size:110%;text-align:justify;"> Khoảng 2: Độ tuổi từ 18 đến 39 (có mật độ trên 0.02).</li>
+  <li style="font-size:110%;text-align:justify;"> Khoảng 3: Độ tuổi từ 17 đến 47 (có mật độ trên 0.01).</li>
+</ul>
+
+
+##### **2.2. Phân bổ số lượng profile theo độ tuổi (từ 23 đến 34)**
+```{r, echo=FALSE}
+gg3 <- user1  %>%
+  filter(!is.na(dateOfBirth)) %>%
+  mutate(year = format.Date(dateOfBirth, "%Y"),
+         year = as.numeric(year)) %>%
+  mutate(age = as.numeric(format.Date(Sys.Date(), "%Y")) - year) %>%
+  filter(age >= 23 & age <= 34) %>%
+  ggplot(aes(age, fill = age)) + 
+  geom_histogram(aes(y=..density.., fill=..density..), col="white", lwd = 0.5, bins = 12) +
+  geom_density(col="#54278f", size = 0.5) +
+  scale_fill_distiller(palette = "Spectral", name = "Mật độ") +
+  scale_x_continuous(labels = scales::label_number_si()) +
+  labs(title="") +
+  xlab("Độ tuổi") +
+  ylab("Mật độ") +  
+  theme(axis.text.x = element_text(angle=0, vjust=0.5)) +
+  theme_minimal()
+ggplotly(gg3, width = 800)
+```
+<p style="font-size:110%;text-align:justify;"> Sau khi tách khoảng tuổi với mật độ xuất hiện cao nhất ta có thể nhìn mật độ rõ hơn cho từng tuổi một. Lượng user tập trung ở tuổi trên dưới 30 - là độ tuổi tài chỉnh cũng ổn định và bắt đầu quan tâm đến sức khỏe hơn.<p>
+<p style="font-size:110%;text-align:justify;"> Đây là khoảng tuổi team data recommend nhất vì mật độ xuất hiện cao, đây cũng là khoảng tuổi tiếp cận với công nghệ nhiều, tự chủ và có thể tự ra quyết định cao. <p>
+
+
+##### **2.3. Phân bổ số lượng profile theo độ tuổi (từ 18 đến 39)**
+```{r, echo=FALSE}
+gg3 <- user1  %>%
+  filter(!is.na(dateOfBirth)) %>%
+  mutate(year = format.Date(dateOfBirth, "%Y"),
+         year = as.numeric(year)) %>%
+  mutate(age = as.numeric(format.Date(Sys.Date(), "%Y")) - year) %>%
+  filter(age >= 18 & age <= 39) %>%
+  ggplot(aes(age, fill = age)) + 
+  geom_histogram(aes(y=..density.., fill=..density..), col="white", lwd = 0.5, bins = 22) +
+  geom_density(col="#54278f", size = 0.5) +
+  scale_fill_distiller(palette = "Spectral", name = "Mật độ") +
+  scale_x_continuous(labels = scales::label_number_si()) +
+  labs(title="") +
+  xlab("Độ tuổi") +
+  ylab("Mật độ") +  
+  theme(axis.text.x = element_text(angle=0, vjust=0.5)) +
+  theme_minimal()
+ggplotly(gg3, width = 1000)
+```
+<p style="font-size:110%;text-align:justify;"> Tương tự sau khi tách khoảng tuổi, đây là độ tuổi có mật độ tập trung từ cũng khá cao so với tổng thể. <p>
+<p style="font-size:110%;text-align:justify;"> Đây cũng là khoảng tuổi tiềm năng do những người trong khoảng tuổi này đều có khả năng tự quyết định.<p>
+
+##### **2.3. Phân bổ số lượng profile theo độ tuổi (từ 17 đến 47)**
+```{r, echo=FALSE}
+gg3 <- user1  %>%
+  filter(!is.na(dateOfBirth)) %>%
+  mutate(year = format.Date(dateOfBirth, "%Y"),
+         year = as.numeric(year)) %>%
+  mutate(age = as.numeric(format.Date(Sys.Date(), "%Y")) - year) %>%
+  filter(age >= 17 & age <= 47) %>%
+  ggplot(aes(age, fill = age)) + 
+  geom_histogram(aes(y=..density.., fill=..density..), col="white", lwd = 0.5, bins = 31) +
+  geom_density(col="#54278f", size = 0.5) +
+  scale_fill_distiller(palette = "Spectral", name = "Mật độ") +
+  scale_x_continuous(labels = scales::label_number_si()) +
+  labs(title="") +
+  xlab("Độ tuổi") +
+  ylab("Mật độ") +  
+  theme(axis.text.x = element_text(angle=0, vjust=0.5)) +
+  theme_minimal()
+ggplotly(gg3, width = 1000)
+```
+<p style="font-size:110%;text-align:justify;"> Đây là khoảng tuổi có mật độ tập trung từ trung bình trở lên. Là những người có tiếp xúc nhiều với công nghệ và mức độ quan tâm về công nghệ cao. <p>
+<p style="font-size:110%;text-align:justify;"> Khoảng tuổi này cần có tính nhạy bén của team marketing để xác định xem liệu đây có phải khoảng tuổi tiềm năng để target quảng cáo hay không. <p>
+
+
+#### **3. Tỉ lệ profile theo giới tính**
+```{r, echo=FALSE}
+fig <- user1 %>%
+  filter(gender != "Không điền") %>%
+  group_by(gender) %>%
+  summarise(count = length(gender)) %>% 
+  mutate(text = paste(gender, "\n Số lượng: ", count)) %>%
+  plot_ly(labels = ~gender, values = ~count, type = 'pie',
+                 textposition = 'inside',
+                 textinfo = 'percent',
+                 hoverinfo = 'text',
+                 text = ~text,
+                 marker = list(colors = colors,
+                               line = list(color = '#FFFFFF', width = 1)),
+                 showlegend = TRUE)
+  fig <- fig %>% layout(xaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE),
+                        yaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE))
+  
+  fig
+```
+<p style="font-size:110%;text-align:justify;"> Với biểu tròn về tỉ lệ nam và nữ trên thì nhận thấy hai tỉ lệ này không quá khác biệt. Do đó, việc xác định được giới tính nào sẽ quan tâm hoặc có nhu cầu sử dụng app cao hơn là không khả quan.<p>
+
+#### **4. Tỉ lệ profile theo nghề nghiệp**
+
+##### *4.1. Biều đồ số lượng profile theo nghề nghiệp*
+```{r, echo=FALSE}
+
+jobs<- data.frame(table(user1$job)) %>%
+  mutate(sum = length(user1$job)) %>%
+  mutate(rate = round(as.numeric(Freq/sum*100), 3)) %>%
+  arrange(desc(Freq))
+
+gg3<- jobs %>%
+  filter(Var1 != "Không điền") %>%
+  mutate(Var1 = fct_reorder(Var1, Freq)) %>%
+  mutate(text = paste("Nghề nghiệp: ", Var1,
+                      "\nSố lượng profile: ", Freq, sep="")) %>%
+  ggplot(aes(x=Var1, y=Freq, text = text)) +
+  geom_bar(aes(fill = Freq), stat="identity") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle=315, vjust=0.5, hjust = 0.5, size = 8))+
+  scale_fill_distiller(palette = "Spectral", name = "Số lượng profile") +
+  scale_y_continuous(labels = scales::label_number_si()) +
+  #scale_y_log10() +
+  xlab("") + ylab("")
+ggplotly(gg3, tooltip="text", width = 1000)
+```
+
+<p style="font-size:110%;text-align:justify;"> Tập dữ liệu về nghề nghiệp chỉ chiếm khoảng 15% trên tổng số profile. Mà nghề nghiệp là "nhân dân" không được xác định rõ ràng. Liệu có phải khi khai báo profile người dùng lựa chọn nghề nghiệp chỉ để cho đầy đủ thông tin.<p>
+<ul>
+  <li style="font-size:110%;text-align:justify;">Cần phân chia và xác định rõ nghề nghiệp. Ví dụ: Nhân dân, nhân viên là làm gì?</li>
+  <li style="font-size:110%;text-align:justify;">Tạo ra thêm lựa chọn về khoảng thu nhập để xác định rõ đối tượng người dùng cần chăm soc. Ví dụ: khoảng thu nhập từ 5 đến 10 triệu, từ 11 đến 15 triệu...</li>
+</ul> 
+
+
+##### *4.2. Biều đồ số lượng profile theo nghề nghiệp (sau khi tách Nhân dân)*
+```{r, echo=FALSE}
+gg3<- jobs %>%
+  filter(Var1 != "Không điền") %>%
+  filter(Var1 != "Nhân dân") %>%
+  mutate(Var1 = fct_reorder(Var1, Freq)) %>%
+  mutate(text = paste("Nghề nghiệp: ", Var1,
+                      "\nSố lượng profile: ", Freq, sep="")) %>%
+  ggplot(aes(x=Var1, y=Freq, text = text)) +
+  geom_bar(aes(fill = Freq), stat="identity") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle=315, vjust=0.5, hjust = 0.5, size = 8))+
+  scale_fill_distiller(palette = "Spectral", name = "Số lượng profile") +
+  scale_y_continuous(labels = scales::label_number_si()) +
+  #scale_y_log10() +
+  xlab("") + ylab("")
+ggplotly(gg3, tooltip="text", width = 1000)
+```
+<p style="font-size:110%;text-align:justify;"> Các nghề nghiệp có lượng profile tập trung cao (Tự do, công nhân, học sinh-sinh viên,giáo viên, nhân viên) là các nhòm ngành nghề có thu nhập trung bình thấp.<p>
+<p style="font-size:110%;text-align:justify;"> Các dịch vụ được quan tâm có thể là các dịch vụ miễn phí hoặc dịch vụ có chi phí thấp.<p>
+
+##### *4.3. Bảng số lượng profile và tỉ lệ profile theo nghề nghiệp*
+```{r, echo=FALSE}
+d1<- jobs %>%
+  select(Var1, Freq, rate)
+
+datatable(    
+    head(d1, 
+         nrow(d1), 
+         width = "auto"),
+    colnames = c("STT", "Tỉnh", "Số lượng profile", "Tỉ lệ (%)"),
+    filter = 'top')
+```
+<p style="font-size:110%;text-align:justify;"> Trên đây là bảng chi tiết danh sách nghề nghiệp cùng số lượng profile và tỉ lệ profile. <p>

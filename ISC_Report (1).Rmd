@@ -1,0 +1,1166 @@
+---
+title: "ISC Report - Báo cáo về thông tin người bệnh"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+#### Packages
+library(DBI)
+library(RPostgres)
+library(readxl)
+library(ggplot2)
+library(plotly)
+library(dplyr)
+library(stringr)
+library(DT)
+library(forcats)
+library(tidyr)
+library(dygraphs)
+library(xts)
+library(apexcharter)
+library(base)
+
+load("~/patient/service1.RData")
+load("~/patient/icd10_af1.RData")
+
+#################### Edit data
+service1$icd10_sa <- str_replace_all(service1$service_icd_main_disease_diagnosis, ";", " ") %>%
+  str_replace_all("[[:punct:]]", "")
+
+service1$icd10_af1 <- str_extract(service1$icd10_sa,"(\\w+)")
+service1$icd10_af1 <- substr(service1$icd10_af1, 1, 3)
+
+service1$icd10_sa2 <- substring(service1$icd10_sa, first = 5)
+service1$icd10_sa2 <- str_trim(service1$icd10_sa2)
+
+service1$icd10_af2 <- str_extract(service1$icd10_sa2,"(\\w+)")
+service1$icd10_af2 <- substr(service1$icd10_af2, 1, 3)
+
+service1$icd10_sa3 <- substring(service1$icd10_sa2, first = 5)
+service1$icd10_sa3 <- str_trim(service1$icd10_sa3)
+
+service1$icd10_af3 <- str_extract(service1$icd10_sa3,"(\\w+)")
+service1$icd10_af3 <- substr(service1$icd10_af3, 1, 3)
+
+service1$icd10_sa4 <- substring(service1$icd10_sa3, first = 5)
+service1$icd10_sa4 <- str_trim(service1$icd10_sa4)
+
+service1$icd10_af4 <- str_extract(service1$icd10_sa4,"(\\w+)")
+service1$icd10_af4 <- substr(service1$icd10_af4, 1, 3)
+
+service1$icd10_sa5 <- substring(service1$icd10_sa4, first = 5)
+service1$icd10_sa5 <- str_trim(service1$icd10_sa5)
+
+service1$icd10_af5 <- str_extract(service1$icd10_sa5,"(\\w+)")
+service1$icd10_af5 <- substr(service1$icd10_af5, 1, 3)
+
+service1$icd10_sa6 <- substring(service1$icd10_sa5, first = 5)
+service1$icd10_sa6 <- str_trim(service1$icd10_sa6)
+
+service1$icd10_af6 <- str_extract(service1$icd10_sa6,"(\\w+)")
+service1$icd10_af6 <- substr(service1$icd10_af6, 1, 3)
+
+service1$icd10_sa7 <- substring(service1$icd10_sa6, first = 5)
+service1$icd10_sa7 <- str_trim(service1$icd10_sa7)
+
+service1$icd10_af7 <- str_extract(service1$icd10_sa7,"(\\w+)")
+service1$icd10_af7 <- substr(service1$icd10_af7, 1, 3)
+
+service1$icd10_sa8 <- substring(service1$icd10_sa7, first = 5)
+service1$icd10_sa8 <- str_trim(service1$icd10_sa8)
+
+service1$icd10_af8 <- str_extract(service1$icd10_sa8,"(\\w+)")
+service1$icd10_af8 <- substr(service1$icd10_af8, 1, 3)
+
+##### Xử lý dữ liệu dành cho phân tích
+
+dta <- service1 %>%
+  mutate(date = as.Date(service_hospitalization_start, "%Y-%m-%d"),
+         weekday = weekdays(date),
+         month = format.Date(date, "%Y-%m"),
+         dup1 = duplicated(service_patient_history_id)) %>%
+  filter(dup1 == FALSE)
+
+dta$weekday[dta$weekday == "Monday"] <- "1. Monday"
+dta$weekday[dta$weekday == "Tuesday"] <- "2. Tuesday"
+dta$weekday[dta$weekday == "Wednesday"] <- "3. Wednesday"
+dta$weekday[dta$weekday == "Thursday"] <- "4. Thursday"
+dta$weekday[dta$weekday == "Friday"] <- "5. Friday"
+dta$weekday[dta$weekday == "Saturday"] <- "6. Saturday"
+dta$weekday[dta$weekday == "Sunday"] <- "7. Sunday"
+
+
+dta2 <- dta %>%
+  mutate(dup2 = duplicated(service_patient_identifier)) %>%
+  filter(dup2 == FALSE)
+```
+
+
+#### **1. Phân tích xu hướng của số lượt tiếp đón và số lượng bệnh nhân theo ngày**
+```{r, echo=FALSE}
+dta_countdate1 <- dta %>%
+  mutate(count = 1) %>%
+  group_by(date) %>%
+  summarise(counts = sum(count))
+
+dta_countdate2 <- dta2 %>%
+  mutate(count = 1) %>%
+  group_by(date) %>%
+  summarise(counts2 = sum(count))
+
+dta_countdate <- full_join(dta_countdate1, dta_countdate2, by = "date") %>%
+  mutate(dates = as.character(date))
+
+apex(dta_countdate, type = "spline", aes(dates, counts), serie_name = "Số lượt tiếp đón") %>%
+  add_line(aes(dates, counts2), type = "spline", serie_name = "Số lượng bệnh nhân") %>%
+  ax_colors(c("#08519c", "#E91E63")) %>%
+  ax_labs("Biểu đồ phân tích xu hướng số lượt tiếp đón và số lượng bệnh nhân theo ngày")
+```
+<p style="font-size:110%;text-align:justify;">Dữ liệu thống kế số lượt tiếp đón và số lượng bệnh nhân theo ngày với các quy luật được thể hiện theo xu hướng sau: <p>
+<ul>
+  <li style="font-size:110%;text-align:justify;">Xu hướng biến động theo chi kỳ năm: các năm 2018 và 2019 do chưa có vấn đề về dịch bệnh nên các số liệu phản ảnh tương đối cao và đều trong một năm; nhưng sang tới năm 2020 và 2021 do ảnh hưởng mạnh của dịch bệnh COVID đã làm theo đổi quy luật theo năm với các điểm tụt giảm rất mạnh vào các thời điểm bùng dịch như tháng 04/2020, 08/2020 và tháng 05/2021 đến nay.</li>
+  <li style="font-size:110%;text-align:justify;">Xu hướng biến động theo các mùa trong năm như cao điểm số lượt tiếp đón và số lượng bệnh nhân sẽ tập trung vào tháng 07 - 08 các năm và thấp nhất vào đợt nghĩ lễ cuối năm tháng 02.</li>
+  <li style="font-size:110%;text-align:justify;">Xu hướng thể hiện quy luật theo tuần với các ngày cuối tuần sẽ giảm mạnh về số lượt, nhất là với ĐHY sẽ không tổ chức khám vào CN và chiều ngày thứ 7. Ngày trong tuần thì số lượt và số lượng bệnh nhân sẽ đạt cao điểm vào ngày thứ ba.</li>
+<ul>
+
+
+#### **2. Phân tích xu hướng của số lượt tiếp đón và số lượng bệnh nhân theo thứ trong tuần**
+```{r, echo=FALSE}
+dta_countweek1 <- dta %>%
+  mutate(count = 1) %>%
+  group_by(weekday) %>%
+  summarise(counts = sum(count)) %>%
+  arrange(weekday)
+
+dta_countweek2 <- dta2 %>%
+  mutate(count = 1) %>%
+  group_by(weekday) %>%
+  summarise(counts2 = sum(count)) %>%
+  arrange(weekday)
+
+dta_countweek <- full_join(dta_countweek1, dta_countweek2, by = "weekday")
+
+apex(dta_countweek, type = "spline", aes(weekday, counts), serie_name = "Số lượt tiếp đón") %>%
+  add_line(aes(weekday, counts2), type = "spline", serie_name = "Số lượng bệnh nhân") %>%
+  ax_colors(c("#08519c", "#E91E63")) %>%
+  ax_markers(size = 4) %>%
+  ax_labs("Biểu đồ phân tích xu hướng số lượt tiếp đón và số lượng bệnh nhân theo thứ trong tuần")
+```
+
+<p style="font-size:110%;text-align:justify;">Nếu phân tích sâu hơn theo quy luật các ngày trong tuần thì xu hướng biến đổi sẽ rõ ràng hơn: <p>
+<ul>
+  <li style="font-size:110%;text-align:justify;">Số lượt tiếp đón và số lượng bệnh nhân sẽ có xu hướng phân đều vào các ngày trong tuần từ thứ 2 đến thứ 6, với thứ 3 đạt đỉnh cao nhất.</li>
+	<li style="font-size:110%;text-align:justify;">Xu hướng chung sẽ giảm dần vào các ngày cuối tuần với thứ 7 thời gian tiếp đón và khám chữa bệnh chỉ áp dụng nửa ngày nên số lượt bệnh nhân gần như tụt giảm gần 40%, ngày Chủ nhật chỉ tiếp đón bệnh nhân cấp cứu nên số lượng bệnh nhân không đáng kể.</li>
+	<li style="font-size:110%;text-align:justify;">Một gợi ý từ xu hướng số liệu của ngày thứ 7: số lượng bệnh nhân có nhu cầu khám chữa bệnh vào cuối tuần là tương đối cao, nhất là các đối tượng hành chính văn phòng thì khoảng thời gian cuối tuần sẽ vẫn có nhu khám chữa bệnh với các bệnh lý thông thường hơặc khám sức khỏe.</li>
+<ul>
+
+
+#### **3. Phân tích xu hướng của số lượt tiếp đón và số lượng bệnh nhân theo tháng**
+```{r, echo=FALSE}
+
+dta_countmonth1 <- dta %>%
+  mutate(count = 1) %>%
+  group_by(month) %>%
+  summarise(counts = sum(count))
+
+dta_countmonth2 <- dta2 %>%
+  mutate(count = 1) %>%
+  group_by(month) %>%
+  summarise(counts2 = sum(count))
+
+dta_countmonth <- full_join(dta_countmonth1, dta_countmonth2, by = "month")
+
+apex(dta_countmonth, type = "spline", aes(month, counts), serie_name = "Số lượt tiếp đón") %>%
+  add_line(aes(month, counts2), type = "spline", serie_name = "Số lượng bệnh nhân") %>%
+  ax_colors(c("#08519c", "#E91E63")) %>%
+  ax_markers(size = 4) %>%
+  ax_labs("Biểu đồ phân tích xu hướng số lượt tiếp đón và số lượng bệnh nhân theo tháng")
+```
+
+<p style="font-size:110%;text-align:justify;">Số liệu sau khi tổng hợp lên các tháng trong năm, thì xu hướng thể hiện càng rõ nét hơn với:<p>
+<ul>
+  <li style="font-size:110%;text-align:justify;">Quy luật theo năm và theo mùa vẫn rõ ràng và chuẩn xác, trong năm thì số lượt tiếp đón và số lượng bệnh nhân sẽ tập trung vào khoảng giữa năm với các tháng từ 05 - 10.</li>
+  <li style="font-size:110%;text-align:justify;">Mức độ tập trung cao nhất của xu hướng vẫn là tháng 07 - 08.</li>
+  <li style="font-size:110%;text-align:justify;">Theo xu hướng tổng thể thì số lượt bệnh nhân và số lượt tiếp đón đang bị ảnh hưởng rất mạnh từ các đợt bùng phát dịch bệnh COVID.</li>
+  <li style="font-size:110%;text-align:justify;">Nhu cầu khám chữa bệnh trên thực tế không hề giảm, được chính minh bằng các số liệu sau giãn cách, các tháng sau đó số lượng bệnh nhân tăng mạnh. Điều này cho thấy với ảnh hưởng của dịch bệnh cũng là cơ hội cho các giải pháp phần mềm khám chữa bệnh và chăm sóc sức khỏe trực tuyến có thể khai thác vào giai đoạn này, đây được coi là xu hướng chung cho giai đoạn tới kể cả trong ngắn hạn và dài hạn.</li>
+<ul>
+
+
+#### **4. Phân tích số lượt đến khám theo từng bệnh nhân**
+```{r, echo=FALSE}
+dta3 <- dta %>%
+  mutate(count = 1) %>%
+  group_by(service_patient_identifier) %>%
+  summarise(counts = sum(count))
+
+dta3_s1 <- dta3 %>%
+  mutate(count2 = 1) %>%
+  group_by(counts) %>%
+  summarise(counts2 = sum(count2))
+
+datatable(dta3_s1)
+
+dta3_s2 <- dta3_s1 %>%
+  filter(counts > 1)
+
+apex(dta3_s1, type = "column", aes(counts, counts2), serie_name = "Số lượng bệnh nhân") %>%
+  ax_labs("Biểu đồ phân tích số lượt đến viện theo từng bệnh nhân")
+
+apex(dta3_s2, type = "column", aes(counts, counts2), serie_name = "Số lượng bệnh nhân") %>%
+  ax_labs("Biểu đồ phân tích số lượt đến viện theo từng bệnh nhân (Chỉ tính từ 2 lượt trở lên)")
+```
+
+
+<p style="font-size:110%;text-align:justify;">Sau khi tổng hợp dữ liệu theo mã người bệnh được ghi nhận trên hệ thống ta có biểu đồ phân tích số lượt đã thăm khám của bệnh nhân:<p>
+<ul>
+  <li style="font-size:110%;text-align:justify;">Thống kê chung cho thấy đa phần bệnh nhân thường là ngoại trú và thường chỉ thăm khám một lượt, tỷ lệ tái khám chưa cao.</li>
+  <li style="font-size:110%;text-align:justify;">Tuy nhiên xét về tổng thể số lượng người bệnh tới khám từ lần thứ 2 trở đi vẫn đạt mức cao với số lượt đạt xấp xỉ 200.000 lượt.</li>
+  <li style="font-size:110%;text-align:justify;">Trong đó tới khám lần thứ 2 cũng đạt tỷ lệ khá cao với 133.000 lượt.</li>
+<ul>
+
+
+#### **5. Phân tích số lượt tiếp đón theo BHYT/Dịch vụ và theo ngày**
+```{r, echo=FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
+dta_type1 <- dta %>%
+  mutate(count = 1) %>%
+  group_by(date, service_patient_type) %>%
+  summarise(counts = sum(count))
+
+apex(dta_type1, type = "spline", aes(date, counts, fill = service_patient_type)) %>%
+  ax_labs("Biểu đồ phân tích số lượt tiếp đón theo bệnh nhân BHYT và Dịch vụ - Theo ngày")
+```
+
+
+#### **6. Phân tích số lượt tiếp đón theo BHYT/Dịch vụ và theo ngày**
+```{r, echo=FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
+dta_type1 <- dta %>%
+  mutate(count = 1) %>%
+  group_by(date, service_patient_type) %>%
+  summarise(counts = sum(count))
+
+apex(dta_type1, type = "spline", aes(date, counts, fill = service_patient_type)) %>%
+  ax_labs("Biểu đồ phân tích số lượt tiếp đón theo bệnh nhân BHYT và Dịch vụ - Theo ngày")
+
+dta2_type1 <- dta2 %>%
+  mutate(count = 1) %>%
+  group_by(date, service_patient_type) %>%
+  summarise(counts = sum(count))
+
+apex(dta2_type1, type = "spline", aes(date, counts, fill = service_patient_type)) %>%
+  ax_labs("Biểu đồ phân tích số lượng bệnh nhân theo bệnh nhân BHYT và Dịch vụ - Theo ngày")
+```
+
+
+
+#### **7. Phân tích số lượt tiếp đón theo BHYT/Dịch vụ và theo tháng**
+```{r, echo=FALSE}
+dta_type2 <- dta %>%
+  mutate(count = 1) %>%
+  group_by(month, service_patient_type) %>%
+  summarise(counts = sum(count))
+
+apex(dta_type2, type = "spline", aes(month, counts, fill = service_patient_type)) %>%
+  ax_colors(c("#08519c", "#E91E63")) %>%
+  ax_markers(size = 4) %>%
+  ax_labs("Biểu đồ phân tích số lượt tiếp đón theo bệnh nhân BHYT và Dịch vụ - Theo tháng")
+```
+
+<ul>
+<li style="font-size:110%;text-align:justify;">Với đặc thù của bệnh viện ĐHY thì số lượng bệnh nhân tới thăm khám có sử dụng BHYT rất thấp so với Dịch vụ nên xu hướng chung vẫn tuân theo quy luật năm, mùa và tuần.</li>
+<li style="font-size:110%;text-align:justify;">Xét đặc thù riêng của nhóm bệnh nhân có sủ dụng báo hiểm y tế thì số lượt tiếp đón tương đối đồng đều qua các năm và tháng. Nếu xét vào xu hướng gần nhất thì số lượt tiếp đón trong năm 2020 và 2021 cũng bị tác động của dịch bệnh theo thời điểm bùng phát dịch. Tuy nhiên ngay sau các tháng ảnh hương thì các tháng tiếp theo đó lượt tiếp đón lại tăng vọt, cụ thể như tháng 12/2020 đạt cao nhất, sau dịp nghỉ tết âm lịch thì tháng 3 và 4/2021 cũng duy trì ở mức cao hơn các tháng khác.</li>
+<ul>
+<br>
+
+####
+```{r, echo=FALSE}
+dta2_type2 <- dta2 %>%
+  mutate(count = 1) %>%
+  group_by(month, service_patient_type) %>%
+  summarise(counts = sum(count))
+
+apex(dta2_type2, type = "spline", aes(month, counts, fill = service_patient_type)) %>%
+  ax_colors(c("#08519c", "#E91E63")) %>%
+  ax_markers(size = 4) %>%
+  ax_labs("Biểu đồ phân tích số lượng bệnh nhân theo bệnh nhân BHYT và Dịch vụ - Theo tháng")
+```
+<ul>
+<li style="font-size:110%;text-align:justify;">Xu hướng chung của biểu đồ là nhóm bệnh nhân sử dụng dịch vụ vẫn cao hơn rất nhiều so với nhóm BHYT.</li>
+<li style="font-size:110%;text-align:justify;">Xét riêng với nhóm sủ dụng dịch vụ thì xu hướng ảnh hưởng của dịch bệnh đang tác động rõ ràng tới số lượng người bệnh tới thăm khám. Hai năm 2018 - 2019: trước thời điểm bùng phát dịch bệnh số lượng bệnh nhân giao động không lớn giữa các tháng trong năm; nhưng với ảnh hưởng COVID trong 2020 và 2021 thì nó tác đồng trực tiếp theo từng gian đoạn bùng phát dịch bệnh nhất là giai đoạn từ tháng 5/2021 đến nay.</li>
+<li style="font-size:110%;text-align:justify;">Với nhóm bệnh nhân sử dụng BHYT thì mức biến động không quá lớn do số lượng bệnh nhân ít, tuy nhiên trong các giai đoạn bùng phát dịch bệnh và giãn cách xã hội thì vẫn có ảnh hưởng rõ ràng, với mức tụt thấp nhất là tháng 08/2021 với 50 bệnh nhân.</li>
+<li style="font-size:110%;text-align:justify;">Một đề xuất cho hướng tiếp cận người bệnh của APP nên đưa ra các giải pháp kết nối trực tiếp người bệnh tới bác sĩ thông qua các lịch đặt khám hoặc tái khám cho các nhóm đối tường điều trị bệnh mãn tính hoặc cần theo dõi sức khỏe.</li>
+<ul>
+<br>
+
+
+#### **8. Phân tích số lượt tiếp đón theo giới tính và theo tháng**
+```{r, echo=FALSE}
+dta_gender <- dta %>%
+  mutate(count = 1) %>%
+  group_by(month, service_gender) %>%
+  summarise(counts = sum(count))
+
+apex(dta_gender, type = "spline", aes(month, counts, fill = service_gender)) %>%
+  ax_colors(c("#08519c", "#E91E63")) %>%
+  ax_markers(size = 4) %>%
+  ax_labs("Biểu đồ phân tích số lượt tiếp đón theo giới tính - Theo tháng")
+
+dta2_gender <- dta2 %>%
+  mutate(count = 1) %>%
+  group_by(month, service_gender) %>%
+  summarise(counts = sum(count))
+
+apex(dta2_gender, type = "spline", aes(month, counts, fill = service_gender)) %>%
+  ax_colors(c("#08519c", "#E91E63")) %>%
+  ax_markers(size = 4) %>%
+  ax_labs("Biểu đồ phân tích số lượng bệnh nhân theo giới tính - Theo tháng")
+```
+
+
+#### **9. Phân tích số lượt tiếp đón theo quốc tịch**
+```{r, echo=FALSE}
+dta_country <- dta %>%
+  mutate(count = 1) %>%
+  group_by(service_country) %>%
+  summarise(counts = sum(count)) %>%
+  arrange(desc(counts))
+
+apex(dta_country, type = "column", aes(service_country, counts), serie_name = "Số lượt tiếp đón")
+
+dta_contry <- dta %>%
+  mutate(count = 1) %>%
+  group_by(service_country) %>%
+  summarise(counts = sum(count)) %>%
+  arrange(desc(counts))
+
+apex(dta_contry, type = "column", aes(service_country, counts), serie_name = "Số lượt tiếp đón") %>%
+  ax_labs("Biểu đồ phân tích số lượt tiếp đón theo quốc tịch của bệnh nhân")
+
+dta_contry2 <- dta_contry %>%
+  filter(service_country != "Việt Nam")
+
+apex(dta_contry2, type = "column", aes(service_country, counts), serie_name = "Số lượt tiếp đón") %>%
+  ax_labs("Biểu đồ phân tích số lượt tiếp đón theo quốc tịch của bệnh nhân (Nhóm bệnh nhân nước ngoài)")
+```
+
+
+#### **11. Phân tích số lượt tiếp đón theo tỉnh**
+```{r, echo=FALSE}
+dta_province <- dta %>%
+  mutate(count = 1) %>%
+  group_by(service_province) %>%
+  summarise(counts = sum(count)) %>%
+  arrange(desc(counts))
+
+apex(dta_province, type = "column", aes(service_province, counts), serie_name = "Số lượt tiếp đón") %>%
+  ax_labs("Biểu đồ phân tích số lượt tiếp đón theo tỉnh/thành phố")
+
+
+dta_province2 <- dta_province %>%
+  filter(service_province != "Hà Nội")
+
+apex(dta_province2, type = "column", aes(service_province, counts), serie_name = "Số lượt tiếp đón") %>%
+  ax_labs("Biểu đồ phân tích số lượt tiếp đón theo tỉnh/thành phố (Không tính TP Hà Nội)")
+```
+
+
+#### **12. Biểu đồ phân tích số lượt tiếp đón theo quận/huyện trực thuộc thành phố Hà Nội**
+```{r, echo=FALSE}
+dta_province3 <- dta %>%
+  mutate(count = 1) %>%
+  filter(service_province == "Hà Nội",
+         !is.na(service_district),
+         service_district != "Cẩm Thủy",
+         service_district != "Kim Sơn",
+         service_district != "Thành phố Thanh Hóa") %>%
+  group_by(service_district) %>%
+  summarise(counts = sum(count)) %>%
+  arrange(desc(counts))
+
+apex(dta_province3, type = "column", aes(service_district, counts), serie_name = "Số lượt tiếp đón") %>%
+  ax_labs("Biểu đồ phân tích số lượt tiếp đón theo quận/huyện trực thuộc thành phố Hà Nội")
+```
+
+
+#### **13. Phân tích số lượt tiếp đón theo khoa chỉ định**
+```{r, echo=FALSE}
+dta_department1 <- dta %>%
+  mutate(count = 1) %>%
+  group_by(service_department_appointed) %>%
+  summarise(counts = sum(count)) %>%
+  arrange(desc(counts))
+
+apex(dta_department1, type = "column", aes(service_department_appointed, counts), serie_name = "Số lượt tiếp đón") %>%
+  ax_labs("Biểu đồ phân tích số lượt tiếp đón theo khoa chỉ định")
+```
+
+
+#### **14. Phân tích số lượt tiếp đón theo khoa thực hiện**
+```{r, echo=FALSE}
+dta_department2 <- dta %>%
+  mutate(count = 1) %>%
+  group_by(service_department_examines) %>%
+  summarise(counts = sum(count)) %>%
+  arrange(desc(counts))
+
+apex(dta_department2, type = "column", aes(service_department_examines, counts), serie_name = "Số lượt tiếp đón") %>%
+  ax_labs("Biểu đồ phân tích số lượt tiếp đón theo khoa thực hiện")
+```
+
+
+#### **15. Phân tích số lượt tiếp đón theo trình độ chuyên môn**
+```{r, echo=FALSE}
+dta_degree <- dta %>%
+  mutate(count = 1) %>%
+  group_by(service_degree) %>%
+  summarise(counts = sum(count)) %>%
+  arrange(desc(counts))
+dta_degree$service_degree[dta_degree$service_degree == "Bác sỹ.TS.PGS"] <- "PGS.TS."
+
+apex(dta_degree, type = "bar", aes(service_degree, counts), serie_name = "Số lượt tiếp đón") %>%
+  ax_labs("Biểu đồ phân tích số lượt tiếp đón theo trình độ chuyên môn của người thực hiện dịch vụ")
+```
+
+
+
+#### **16. Phân tích số lượt tiếp đón theo bác sĩ thực hiện**
+```{r, echo=FALSE}
+dta_doctor <- dta %>%
+  mutate(count = 1) %>%
+  group_by(service_doctor_examines) %>%
+  summarise(counts = sum(count)) %>%
+  arrange(desc(counts)) %>%
+  filter(!is.na(service_doctor_examines))
+
+apex(dta_doctor, type = "column", aes(service_doctor_examines, counts), serie_name = "Số lượt tiếp đón") %>%
+  ax_labs("Biểu đồ phân tích số lượt tiếp đón theo bác sĩ thực hiện")
+
+dta_doctor2 <- dta_doctor %>%
+  filter(counts > 5000)
+
+apex(dta_doctor2, type = "column", aes(service_doctor_examines, counts), serie_name = "Số lượt tiếp đón") %>%
+  ax_labs("Biểu đồ phân tích số lượt tiếp đón theo bác sĩ thực hiện (Bác sĩ có số lượt khám trên 5000 lượt)")
+```
+
+#### **17. Phân tích số lượt khám theo chẩn đoán ICD bậc 1**
+```{r, echo=FALSE}
+##################### Edit chẩn đoán chính
+service1$icd10_sa <- str_replace_all(service1$service_icd_main_disease_diagnosis, ";", " ") %>%
+  str_replace_all("[[:punct:]]", "")
+
+service1$icd10_af1 <- str_extract(service1$icd10_sa,"(\\w+)")
+service1$icd10_af1 <- substr(service1$icd10_af1, 1, 3)
+
+service1$icd10_sa2 <- substring(service1$icd10_sa, first = 5)
+service1$icd10_sa2 <- str_trim(service1$icd10_sa2)
+
+service1$icd10_af2 <- str_extract(service1$icd10_sa2,"(\\w+)")
+service1$icd10_af2 <- substr(service1$icd10_af2, 1, 3)
+
+service1$icd10_sa3 <- substring(service1$icd10_sa2, first = 5)
+service1$icd10_sa3 <- str_trim(service1$icd10_sa3)
+
+service1$icd10_af3 <- str_extract(service1$icd10_sa3,"(\\w+)")
+service1$icd10_af3 <- substr(service1$icd10_af3, 1, 3)
+
+service1$icd10_sa4 <- substring(service1$icd10_sa3, first = 5)
+service1$icd10_sa4 <- str_trim(service1$icd10_sa4)
+
+service1$icd10_af4 <- str_extract(service1$icd10_sa4,"(\\w+)")
+service1$icd10_af4 <- substr(service1$icd10_af4, 1, 3)
+
+service1$icd10_sa5 <- substring(service1$icd10_sa4, first = 5)
+service1$icd10_sa5 <- str_trim(service1$icd10_sa5)
+
+service1$icd10_af5 <- str_extract(service1$icd10_sa5,"(\\w+)")
+service1$icd10_af5 <- substr(service1$icd10_af5, 1, 3)
+
+service1$icd10_sa6 <- substring(service1$icd10_sa5, first = 5)
+service1$icd10_sa6 <- str_trim(service1$icd10_sa6)
+
+service1$icd10_af6 <- str_extract(service1$icd10_sa6,"(\\w+)")
+service1$icd10_af6 <- substr(service1$icd10_af6, 1, 3)
+
+service1$icd10_sa7 <- substring(service1$icd10_sa6, first = 5)
+service1$icd10_sa7 <- str_trim(service1$icd10_sa7)
+
+service1$icd10_af7 <- str_extract(service1$icd10_sa7,"(\\w+)")
+service1$icd10_af7 <- substr(service1$icd10_af7, 1, 3)
+
+service1$icd10_sa8 <- substring(service1$icd10_sa7, first = 5)
+service1$icd10_sa8 <- str_trim(service1$icd10_sa8)
+
+service1$icd10_af8 <- str_extract(service1$icd10_sa8,"(\\w+)")
+service1$icd10_af8 <- substr(service1$icd10_af8, 1, 3)
+
+##################### Chẩn đoán chính
+dta<- icd10_af1 %>%
+  mutate(count = 1) %>%
+  group_by(icd10_af1_d1_names) %>%
+  summarise(counts = sum(count)) %>%
+  arrange(desc(counts))
+
+##################### Chẩn đoán 2
+icd10_af2<- service1 %>%
+  mutate(dup = duplicated(service_patient_history_id)) %>%
+  filter(dup == FALSE) %>%
+  select(service_patient_history_id, service_patient_identifier, icd10_af2)
+
+icd10_af2$icd10_af2_d1 <- str_sub(icd10_af2$icd10_af2, 1, 1)
+icd10_af2$icd10_af2_d2 <- str_sub(icd10_af2$icd10_af2, 2, 3)
+
+###Tạo biến theo chương mục phân loại bệnh tật ICD10 phân cấp 1 ##### 
+
+icd10_af2$icd10_af2_d1_names[icd10_af2$icd10_af2_d1 == "A" | 
+                               icd10_af2$icd10_af2_d1 == "B"] <- "Bệnh nhiễm trùng và ký sinh trùng"
+icd10_af2$icd10_af2_d1_names[icd10_af2$icd10_af2_d1 == "C"] <- "U tân sinh"
+icd10_af2$icd10_af2_d1_names[icd10_af2$icd10_af2_d1 == "D" & 
+                               icd10_af2$icd10_af2_d2 >= 0 &
+                               icd10_af2$icd10_af2_d2 <= 48] <- "U tân sinh"
+icd10_af2$icd10_af2_d1_names[icd10_af2$icd10_af2_d1 == "D" & 
+                               icd10_af2$icd10_af2_d2 >= 50 &
+                               icd10_af2$icd10_af2_d2 <= 89] <- "Bệnh máu, cơ quan tạo máu và các bệnh lý liên quan đến cơ chế miễn dịch"
+icd10_af2$icd10_af2_d1_names[icd10_af2$icd10_af2_d1 == "E"] <- "Bệnh nội tiết, dinh dưỡng và chuyển hoá"
+icd10_af2$icd10_af2_d1_names[icd10_af2$icd10_af2_d1 == "F"] <- "Rối loạn tâm thần và hành vi"
+icd10_af2$icd10_af2_d1_names[icd10_af2$icd10_af2_d1 == "G"] <- "Bệnh hệ thần kinh"
+icd10_af2$icd10_af2_d1_names[icd10_af2$icd10_af2_d1 == "H" & 
+                               icd10_af2$icd10_af2_d2 >= 0 &
+                               icd10_af2$icd10_af2_d2 <= 59] <- "Bệnh mắt và phần phụ"
+icd10_af2$icd10_af2_d1_names[icd10_af2$icd10_af2_d1 == "H" & 
+                               icd10_af2$icd10_af2_d2 >= 60 &
+                               icd10_af2$icd10_af2_d2 <= 95] <- "Bệnh tai và xương chũm"
+icd10_af2$icd10_af2_d1_names[icd10_af2$icd10_af2_d1 == "I"] <- "Bệnh hệ tuần hoàn"
+icd10_af2$icd10_af2_d1_names[icd10_af2$icd10_af2_d1 == "J"] <- "Bệnh hệ hô hấp"
+icd10_af2$icd10_af2_d1_names[icd10_af2$icd10_af2_d1 == "K"] <- "Bệnh hệ tiêu hoá"
+icd10_af2$icd10_af2_d1_names[icd10_af2$icd10_af2_d1 == "L"] <- "Bệnh da và tổ chức dưới da"
+icd10_af2$icd10_af2_d1_names[icd10_af2$icd10_af2_d1 == "M"] <- "Bệnh hệ cơ, xương, khớp và mô liên kết"
+icd10_af2$icd10_af2_d1_names[icd10_af2$icd10_af2_d1 == "N"] <- "Bệnh hệ sinh dục, tiết niệu"
+icd10_af2$icd10_af2_d1_names[icd10_af2$icd10_af2_d1 == "O"] <- "Mang thai, sinh đẻ và hậu sản"
+icd10_af2$icd10_af2_d1_names[icd10_af2$icd10_af2_d1 == "P"] <- "Một số bệnh lý khởi phát trong thời kỳ chu sinh"
+icd10_af2$icd10_af2_d1_names[icd10_af2$icd10_af2_d1 == "Q"] <- "Dị tật bẩm sinh, biến dạng và bất thường về nhiễm sắc thể"
+icd10_af2$icd10_af2_d1_names[icd10_af2$icd10_af2_d1 == "R"] <- "Các triệu chứng và bất thường về lâm sàng, cận lâm sàng không phân loại nơi khác"
+icd10_af2$icd10_af2_d1_names[icd10_af2$icd10_af2_d1 == "S" |
+                               icd10_af2$icd10_af2_d1 == "T"] <- "Vết thương, ngộ độc và hậu quả của một số nguyên nhân từ bên ngoài"
+icd10_af2$icd10_af2_d1_names[icd10_af2$icd10_af2_d1 == "V" |
+                               icd10_af2$icd10_af2_d1 == "W" |
+                               icd10_af2$icd10_af2_d1 == "X" |
+                               icd10_af2$icd10_af2_d1 == "Y"] <- "Các nguyên nhân từ bên ngoài của bệnh tật và tử vong"
+icd10_af2$icd10_af2_d1_names[icd10_af2$icd10_af2_d1 == "Z"] <- "Các yếu tố liên quan đến tình trạng sức khỏe và tiếp cận dịch vụ y tế"
+icd10_af2$icd10_af2_d1_names[icd10_af2$icd10_af2_d1 == "U"] <- "Mã dành cho những mục đích đặc biệt"
+
+
+dta2<- icd10_af2 %>%
+  mutate(count = 1) %>%
+  group_by(icd10_af2_d1_names) %>%
+  summarise(counts = sum(count)) %>%
+  arrange(desc(counts))
+
+
+##################### Chẩn đoán 3
+icd10_af3<- service1 %>%
+  mutate(dup = duplicated(service_patient_history_id)) %>%
+  filter(dup == FALSE) %>%
+  select(service_patient_history_id, service_patient_identifier, icd10_af3)
+
+icd10_af3$icd10_af3_d1 <- str_sub(icd10_af3$icd10_af3, 1, 1)
+icd10_af3$icd10_af3_d2 <- str_sub(icd10_af3$icd10_af3, 2, 3)
+
+###Tạo biến theo chương mục phân loại bệnh tật ICD10 phân cấp 1 ##### 
+
+icd10_af3$icd10_af3_d1_names[icd10_af3$icd10_af3_d1 == "A" | 
+                               icd10_af3$icd10_af3_d1 == "B"] <- "Bệnh nhiễm trùng và ký sinh trùng"
+icd10_af3$icd10_af3_d1_names[icd10_af3$icd10_af3_d1 == "C"] <- "U tân sinh"
+icd10_af3$icd10_af3_d1_names[icd10_af3$icd10_af3_d1 == "D" & 
+                               icd10_af3$icd10_af3_d2 >= 0 &
+                               icd10_af3$icd10_af3_d2 <= 48] <- "U tân sinh"
+icd10_af3$icd10_af3_d1_names[icd10_af3$icd10_af3_d1 == "D" & 
+                               icd10_af3$icd10_af3_d2 >= 50 &
+                               icd10_af3$icd10_af3_d2 <= 89] <- "Bệnh máu, cơ quan tạo máu và các bệnh lý liên quan đến cơ chế miễn dịch"
+icd10_af3$icd10_af3_d1_names[icd10_af3$icd10_af3_d1 == "E"] <- "Bệnh nội tiết, dinh dưỡng và chuyển hoá"
+icd10_af3$icd10_af3_d1_names[icd10_af3$icd10_af3_d1 == "F"] <- "Rối loạn tâm thần và hành vi"
+icd10_af3$icd10_af3_d1_names[icd10_af3$icd10_af3_d1 == "G"] <- "Bệnh hệ thần kinh"
+icd10_af3$icd10_af3_d1_names[icd10_af3$icd10_af3_d1 == "H" & 
+                               icd10_af3$icd10_af3_d2 >= 0 &
+                               icd10_af3$icd10_af3_d2 <= 59] <- "Bệnh mắt và phần phụ"
+icd10_af3$icd10_af3_d1_names[icd10_af3$icd10_af3_d1 == "H" & 
+                               icd10_af3$icd10_af3_d2 >= 60 &
+                               icd10_af3$icd10_af3_d2 <= 95] <- "Bệnh tai và xương chũm"
+icd10_af3$icd10_af3_d1_names[icd10_af3$icd10_af3_d1 == "I"] <- "Bệnh hệ tuần hoàn"
+icd10_af3$icd10_af3_d1_names[icd10_af3$icd10_af3_d1 == "J"] <- "Bệnh hệ hô hấp"
+icd10_af3$icd10_af3_d1_names[icd10_af3$icd10_af3_d1 == "K"] <- "Bệnh hệ tiêu hoá"
+icd10_af3$icd10_af3_d1_names[icd10_af3$icd10_af3_d1 == "L"] <- "Bệnh da và tổ chức dưới da"
+icd10_af3$icd10_af3_d1_names[icd10_af3$icd10_af3_d1 == "M"] <- "Bệnh hệ cơ, xương, khớp và mô liên kết"
+icd10_af3$icd10_af3_d1_names[icd10_af3$icd10_af3_d1 == "N"] <- "Bệnh hệ sinh dục, tiết niệu"
+icd10_af3$icd10_af3_d1_names[icd10_af3$icd10_af3_d1 == "O"] <- "Mang thai, sinh đẻ và hậu sản"
+icd10_af3$icd10_af3_d1_names[icd10_af3$icd10_af3_d1 == "P"] <- "Một số bệnh lý khởi phát trong thời kỳ chu sinh"
+icd10_af3$icd10_af3_d1_names[icd10_af3$icd10_af3_d1 == "Q"] <- "Dị tật bẩm sinh, biến dạng và bất thường về nhiễm sắc thể"
+icd10_af3$icd10_af3_d1_names[icd10_af3$icd10_af3_d1 == "R"] <- "Các triệu chứng và bất thường về lâm sàng, cận lâm sàng không phân loại nơi khác"
+icd10_af3$icd10_af3_d1_names[icd10_af3$icd10_af3_d1 == "S" |
+                               icd10_af3$icd10_af3_d1 == "T"] <- "Vết thương, ngộ độc và hậu quả của một số nguyên nhân từ bên ngoài"
+icd10_af3$icd10_af3_d1_names[icd10_af3$icd10_af3_d1 == "V" |
+                               icd10_af3$icd10_af3_d1 == "W" |
+                               icd10_af3$icd10_af3_d1 == "X" |
+                               icd10_af3$icd10_af3_d1 == "Y"] <- "Các nguyên nhân từ bên ngoài của bệnh tật và tử vong"
+icd10_af3$icd10_af3_d1_names[icd10_af3$icd10_af3_d1 == "Z"] <- "Các yếu tố liên quan đến tình trạng sức khỏe và tiếp cận dịch vụ y tế"
+icd10_af3$icd10_af3_d1_names[icd10_af3$icd10_af3_d1 == "U"] <- "Mã dành cho những mục đích đặc biệt"
+
+
+dta3<- icd10_af3 %>%
+  mutate(count = 1) %>%
+  group_by(icd10_af3_d1_names) %>%
+  summarise(counts = sum(count)) %>%
+  arrange(desc(counts))
+
+##################### Chẩn đoán 4
+icd10_af4<- service1 %>%
+  mutate(dup = duplicated(service_patient_history_id)) %>%
+  filter(dup == FALSE) %>%
+  select(service_patient_history_id, service_patient_identifier, icd10_af4)
+
+icd10_af4$icd10_af4_d1 <- str_sub(icd10_af4$icd10_af4, 1, 1)
+icd10_af4$icd10_af4_d2 <- str_sub(icd10_af4$icd10_af4, 2, 3)
+
+###Tạo biến theo chương mục phân loại bệnh tật ICD10 phân cấp 1 ##### 
+
+icd10_af4$icd10_af4_d1_names[icd10_af4$icd10_af4_d1 == "A" | 
+                               icd10_af4$icd10_af4_d1 == "B"] <- "Bệnh nhiễm trùng và ký sinh trùng"
+icd10_af4$icd10_af4_d1_names[icd10_af4$icd10_af4_d1 == "C"] <- "U tân sinh"
+icd10_af4$icd10_af4_d1_names[icd10_af4$icd10_af4_d1 == "D" & 
+                               icd10_af4$icd10_af4_d2 >= 0 &
+                               icd10_af4$icd10_af4_d2 <= 48] <- "U tân sinh"
+icd10_af4$icd10_af4_d1_names[icd10_af4$icd10_af4_d1 == "D" & 
+                               icd10_af4$icd10_af4_d2 >= 50 &
+                               icd10_af4$icd10_af4_d2 <= 89] <- "Bệnh máu, cơ quan tạo máu và các bệnh lý liên quan đến cơ chế miễn dịch"
+icd10_af4$icd10_af4_d1_names[icd10_af4$icd10_af4_d1 == "E"] <- "Bệnh nội tiết, dinh dưỡng và chuyển hoá"
+icd10_af4$icd10_af4_d1_names[icd10_af4$icd10_af4_d1 == "F"] <- "Rối loạn tâm thần và hành vi"
+icd10_af4$icd10_af4_d1_names[icd10_af4$icd10_af4_d1 == "G"] <- "Bệnh hệ thần kinh"
+icd10_af4$icd10_af4_d1_names[icd10_af4$icd10_af4_d1 == "H" & 
+                               icd10_af4$icd10_af4_d2 >= 0 &
+                               icd10_af4$icd10_af4_d2 <= 59] <- "Bệnh mắt và phần phụ"
+icd10_af4$icd10_af4_d1_names[icd10_af4$icd10_af4_d1 == "H" & 
+                               icd10_af4$icd10_af4_d2 >= 60 &
+                               icd10_af4$icd10_af4_d2 <= 95] <- "Bệnh tai và xương chũm"
+icd10_af4$icd10_af4_d1_names[icd10_af4$icd10_af4_d1 == "I"] <- "Bệnh hệ tuần hoàn"
+icd10_af4$icd10_af4_d1_names[icd10_af4$icd10_af4_d1 == "J"] <- "Bệnh hệ hô hấp"
+icd10_af4$icd10_af4_d1_names[icd10_af4$icd10_af4_d1 == "K"] <- "Bệnh hệ tiêu hoá"
+icd10_af4$icd10_af4_d1_names[icd10_af4$icd10_af4_d1 == "L"] <- "Bệnh da và tổ chức dưới da"
+icd10_af4$icd10_af4_d1_names[icd10_af4$icd10_af4_d1 == "M"] <- "Bệnh hệ cơ, xương, khớp và mô liên kết"
+icd10_af4$icd10_af4_d1_names[icd10_af4$icd10_af4_d1 == "N"] <- "Bệnh hệ sinh dục, tiết niệu"
+icd10_af4$icd10_af4_d1_names[icd10_af4$icd10_af4_d1 == "O"] <- "Mang thai, sinh đẻ và hậu sản"
+icd10_af4$icd10_af4_d1_names[icd10_af4$icd10_af4_d1 == "P"] <- "Một số bệnh lý khởi phát trong thời kỳ chu sinh"
+icd10_af4$icd10_af4_d1_names[icd10_af4$icd10_af4_d1 == "Q"] <- "Dị tật bẩm sinh, biến dạng và bất thường về nhiễm sắc thể"
+icd10_af4$icd10_af4_d1_names[icd10_af4$icd10_af4_d1 == "R"] <- "Các triệu chứng và bất thường về lâm sàng, cận lâm sàng không phân loại nơi khác"
+icd10_af4$icd10_af4_d1_names[icd10_af4$icd10_af4_d1 == "S" |
+                               icd10_af4$icd10_af4_d1 == "T"] <- "Vết thương, ngộ độc và hậu quả của một số nguyên nhân từ bên ngoài"
+icd10_af4$icd10_af4_d1_names[icd10_af4$icd10_af4_d1 == "V" |
+                               icd10_af4$icd10_af4_d1 == "W" |
+                               icd10_af4$icd10_af4_d1 == "X" |
+                               icd10_af4$icd10_af4_d1 == "Y"] <- "Các nguyên nhân từ bên ngoài của bệnh tật và tử vong"
+icd10_af4$icd10_af4_d1_names[icd10_af4$icd10_af4_d1 == "Z"] <- "Các yếu tố liên quan đến tình trạng sức khỏe và tiếp cận dịch vụ y tế"
+icd10_af4$icd10_af4_d1_names[icd10_af4$icd10_af4_d1 == "U"] <- "Mã dành cho những mục đích đặc biệt"
+
+
+dta4<- icd10_af4 %>%
+  mutate(count = 1) %>%
+  group_by(icd10_af4_d1_names) %>%
+  summarise(counts = sum(count)) %>%
+  arrange(desc(counts))
+
+
+##################### Chẩn đoán 5
+icd10_af5<- service1 %>%
+  mutate(dup = duplicated(service_patient_history_id)) %>%
+  filter(dup == FALSE) %>%
+  select(service_patient_history_id, service_patient_identifier, icd10_af5)
+
+icd10_af5$icd10_af5_d1 <- str_sub(icd10_af5$icd10_af5, 1, 1)
+icd10_af5$icd10_af5_d2 <- str_sub(icd10_af5$icd10_af5, 2, 3)
+
+###Tạo biến theo chương mục phân loại bệnh tật ICD10 phân cấp 1 ##### 
+
+icd10_af5$icd10_af5_d1_names[icd10_af5$icd10_af5_d1 == "A" | 
+                               icd10_af5$icd10_af5_d1 == "B"] <- "Bệnh nhiễm trùng và ký sinh trùng"
+icd10_af5$icd10_af5_d1_names[icd10_af5$icd10_af5_d1 == "C"] <- "U tân sinh"
+icd10_af5$icd10_af5_d1_names[icd10_af5$icd10_af5_d1 == "D" & 
+                               icd10_af5$icd10_af5_d2 >= 0 &
+                               icd10_af5$icd10_af5_d2 <= 48] <- "U tân sinh"
+icd10_af5$icd10_af5_d1_names[icd10_af5$icd10_af5_d1 == "D" & 
+                               icd10_af5$icd10_af5_d2 >= 50 &
+                               icd10_af5$icd10_af5_d2 <= 89] <- "Bệnh máu, cơ quan tạo máu và các bệnh lý liên quan đến cơ chế miễn dịch"
+icd10_af5$icd10_af5_d1_names[icd10_af5$icd10_af5_d1 == "E"] <- "Bệnh nội tiết, dinh dưỡng và chuyển hoá"
+icd10_af5$icd10_af5_d1_names[icd10_af5$icd10_af5_d1 == "F"] <- "Rối loạn tâm thần và hành vi"
+icd10_af5$icd10_af5_d1_names[icd10_af5$icd10_af5_d1 == "G"] <- "Bệnh hệ thần kinh"
+icd10_af5$icd10_af5_d1_names[icd10_af5$icd10_af5_d1 == "H" & 
+                               icd10_af5$icd10_af5_d2 >= 0 &
+                               icd10_af5$icd10_af5_d2 <= 59] <- "Bệnh mắt và phần phụ"
+icd10_af5$icd10_af5_d1_names[icd10_af5$icd10_af5_d1 == "H" & 
+                               icd10_af5$icd10_af5_d2 >= 60 &
+                               icd10_af5$icd10_af5_d2 <= 95] <- "Bệnh tai và xương chũm"
+icd10_af5$icd10_af5_d1_names[icd10_af5$icd10_af5_d1 == "I"] <- "Bệnh hệ tuần hoàn"
+icd10_af5$icd10_af5_d1_names[icd10_af5$icd10_af5_d1 == "J"] <- "Bệnh hệ hô hấp"
+icd10_af5$icd10_af5_d1_names[icd10_af5$icd10_af5_d1 == "K"] <- "Bệnh hệ tiêu hoá"
+icd10_af5$icd10_af5_d1_names[icd10_af5$icd10_af5_d1 == "L"] <- "Bệnh da và tổ chức dưới da"
+icd10_af5$icd10_af5_d1_names[icd10_af5$icd10_af5_d1 == "M"] <- "Bệnh hệ cơ, xương, khớp và mô liên kết"
+icd10_af5$icd10_af5_d1_names[icd10_af5$icd10_af5_d1 == "N"] <- "Bệnh hệ sinh dục, tiết niệu"
+icd10_af5$icd10_af5_d1_names[icd10_af5$icd10_af5_d1 == "O"] <- "Mang thai, sinh đẻ và hậu sản"
+icd10_af5$icd10_af5_d1_names[icd10_af5$icd10_af5_d1 == "P"] <- "Một số bệnh lý khởi phát trong thời kỳ chu sinh"
+icd10_af5$icd10_af5_d1_names[icd10_af5$icd10_af5_d1 == "Q"] <- "Dị tật bẩm sinh, biến dạng và bất thường về nhiễm sắc thể"
+icd10_af5$icd10_af5_d1_names[icd10_af5$icd10_af5_d1 == "R"] <- "Các triệu chứng và bất thường về lâm sàng, cận lâm sàng không phân loại nơi khác"
+icd10_af5$icd10_af5_d1_names[icd10_af5$icd10_af5_d1 == "S" |
+                               icd10_af5$icd10_af5_d1 == "T"] <- "Vết thương, ngộ độc và hậu quả của một số nguyên nhân từ bên ngoài"
+icd10_af5$icd10_af5_d1_names[icd10_af5$icd10_af5_d1 == "V" |
+                               icd10_af5$icd10_af5_d1 == "W" |
+                               icd10_af5$icd10_af5_d1 == "X" |
+                               icd10_af5$icd10_af5_d1 == "Y"] <- "Các nguyên nhân từ bên ngoài của bệnh tật và tử vong"
+icd10_af5$icd10_af5_d1_names[icd10_af5$icd10_af5_d1 == "Z"] <- "Các yếu tố liên quan đến tình trạng sức khỏe và tiếp cận dịch vụ y tế"
+icd10_af5$icd10_af5_d1_names[icd10_af5$icd10_af5_d1 == "U"] <- "Mã dành cho những mục đích đặc biệt"
+
+
+dta5<- icd10_af5 %>%
+  mutate(count = 1) %>%
+  group_by(icd10_af5_d1_names) %>%
+  summarise(counts = sum(count)) %>%
+  arrange(desc(counts))
+
+
+##################### Chẩn đoán 6
+icd10_af6<- service1 %>%
+  mutate(dup = duplicated(service_patient_history_id)) %>%
+  filter(dup == FALSE) %>%
+  select(service_patient_history_id, service_patient_identifier, icd10_af6)
+
+icd10_af6$icd10_af6_d1 <- str_sub(icd10_af6$icd10_af6, 1, 1)
+icd10_af6$icd10_af6_d2 <- str_sub(icd10_af6$icd10_af6, 2, 3)
+
+###Tạo biến theo chương mục phân loại bệnh tật ICD10 phân cấp 1 ##### 
+
+icd10_af6$icd10_af6_d1_names[icd10_af6$icd10_af6_d1 == "A" | 
+                               icd10_af6$icd10_af6_d1 == "B"] <- "Bệnh nhiễm trùng và ký sinh trùng"
+icd10_af6$icd10_af6_d1_names[icd10_af6$icd10_af6_d1 == "C"] <- "U tân sinh"
+icd10_af6$icd10_af6_d1_names[icd10_af6$icd10_af6_d1 == "D" & 
+                               icd10_af6$icd10_af6_d2 >= 0 &
+                               icd10_af6$icd10_af6_d2 <= 48] <- "U tân sinh"
+icd10_af6$icd10_af6_d1_names[icd10_af6$icd10_af6_d1 == "D" & 
+                               icd10_af6$icd10_af6_d2 >= 50 &
+                               icd10_af6$icd10_af6_d2 <= 89] <- "Bệnh máu, cơ quan tạo máu và các bệnh lý liên quan đến cơ chế miễn dịch"
+icd10_af6$icd10_af6_d1_names[icd10_af6$icd10_af6_d1 == "E"] <- "Bệnh nội tiết, dinh dưỡng và chuyển hoá"
+icd10_af6$icd10_af6_d1_names[icd10_af6$icd10_af6_d1 == "F"] <- "Rối loạn tâm thần và hành vi"
+icd10_af6$icd10_af6_d1_names[icd10_af6$icd10_af6_d1 == "G"] <- "Bệnh hệ thần kinh"
+icd10_af6$icd10_af6_d1_names[icd10_af6$icd10_af6_d1 == "H" & 
+                               icd10_af6$icd10_af6_d2 >= 0 &
+                               icd10_af6$icd10_af6_d2 <= 59] <- "Bệnh mắt và phần phụ"
+icd10_af6$icd10_af6_d1_names[icd10_af6$icd10_af6_d1 == "H" & 
+                               icd10_af6$icd10_af6_d2 >= 60 &
+                               icd10_af6$icd10_af6_d2 <= 95] <- "Bệnh tai và xương chũm"
+icd10_af6$icd10_af6_d1_names[icd10_af6$icd10_af6_d1 == "I"] <- "Bệnh hệ tuần hoàn"
+icd10_af6$icd10_af6_d1_names[icd10_af6$icd10_af6_d1 == "J"] <- "Bệnh hệ hô hấp"
+icd10_af6$icd10_af6_d1_names[icd10_af6$icd10_af6_d1 == "K"] <- "Bệnh hệ tiêu hoá"
+icd10_af6$icd10_af6_d1_names[icd10_af6$icd10_af6_d1 == "L"] <- "Bệnh da và tổ chức dưới da"
+icd10_af6$icd10_af6_d1_names[icd10_af6$icd10_af6_d1 == "M"] <- "Bệnh hệ cơ, xương, khớp và mô liên kết"
+icd10_af6$icd10_af6_d1_names[icd10_af6$icd10_af6_d1 == "N"] <- "Bệnh hệ sinh dục, tiết niệu"
+icd10_af6$icd10_af6_d1_names[icd10_af6$icd10_af6_d1 == "O"] <- "Mang thai, sinh đẻ và hậu sản"
+icd10_af6$icd10_af6_d1_names[icd10_af6$icd10_af6_d1 == "P"] <- "Một số bệnh lý khởi phát trong thời kỳ chu sinh"
+icd10_af6$icd10_af6_d1_names[icd10_af6$icd10_af6_d1 == "Q"] <- "Dị tật bẩm sinh, biến dạng và bất thường về nhiễm sắc thể"
+icd10_af6$icd10_af6_d1_names[icd10_af6$icd10_af6_d1 == "R"] <- "Các triệu chứng và bất thường về lâm sàng, cận lâm sàng không phân loại nơi khác"
+icd10_af6$icd10_af6_d1_names[icd10_af6$icd10_af6_d1 == "S" |
+                               icd10_af6$icd10_af6_d1 == "T"] <- "Vết thương, ngộ độc và hậu quả của một số nguyên nhân từ bên ngoài"
+icd10_af6$icd10_af6_d1_names[icd10_af6$icd10_af6_d1 == "V" |
+                               icd10_af6$icd10_af6_d1 == "W" |
+                               icd10_af6$icd10_af6_d1 == "X" |
+                               icd10_af6$icd10_af6_d1 == "Y"] <- "Các nguyên nhân từ bên ngoài của bệnh tật và tử vong"
+icd10_af6$icd10_af6_d1_names[icd10_af6$icd10_af6_d1 == "Z"] <- "Các yếu tố liên quan đến tình trạng sức khỏe và tiếp cận dịch vụ y tế"
+icd10_af6$icd10_af6_d1_names[icd10_af6$icd10_af6_d1 == "U"] <- "Mã dành cho những mục đích đặc biệt"
+
+
+dta6<- icd10_af6 %>%
+  mutate(count = 1) %>%
+  group_by(icd10_af6_d1_names) %>%
+  summarise(counts = sum(count)) %>%
+  arrange(desc(counts))
+
+
+##################### Chẩn đoán 7
+icd10_af7<- service1 %>%
+  mutate(dup = duplicated(service_patient_history_id)) %>%
+  filter(dup == FALSE) %>%
+  select(service_patient_history_id, service_patient_identifier, icd10_af7)
+
+icd10_af7$icd10_af7_d1 <- str_sub(icd10_af7$icd10_af7, 1, 1)
+icd10_af7$icd10_af7_d2 <- str_sub(icd10_af7$icd10_af7, 2, 3)
+
+###Tạo biến theo chương mục phân loại bệnh tật ICD10 phân cấp 1 ##### 
+
+icd10_af7$icd10_af7_d1_names[icd10_af7$icd10_af7_d1 == "A" | 
+                               icd10_af7$icd10_af7_d1 == "B"] <- "Bệnh nhiễm trùng và ký sinh trùng"
+icd10_af7$icd10_af7_d1_names[icd10_af7$icd10_af7_d1 == "C"] <- "U tân sinh"
+icd10_af7$icd10_af7_d1_names[icd10_af7$icd10_af7_d1 == "D" & 
+                               icd10_af7$icd10_af7_d2 >= 0 &
+                               icd10_af7$icd10_af7_d2 <= 48] <- "U tân sinh"
+icd10_af7$icd10_af7_d1_names[icd10_af7$icd10_af7_d1 == "D" & 
+                               icd10_af7$icd10_af7_d2 >= 50 &
+                               icd10_af7$icd10_af7_d2 <= 89] <- "Bệnh máu, cơ quan tạo máu và các bệnh lý liên quan đến cơ chế miễn dịch"
+icd10_af7$icd10_af7_d1_names[icd10_af7$icd10_af7_d1 == "E"] <- "Bệnh nội tiết, dinh dưỡng và chuyển hoá"
+icd10_af7$icd10_af7_d1_names[icd10_af7$icd10_af7_d1 == "F"] <- "Rối loạn tâm thần và hành vi"
+icd10_af7$icd10_af7_d1_names[icd10_af7$icd10_af7_d1 == "G"] <- "Bệnh hệ thần kinh"
+icd10_af7$icd10_af7_d1_names[icd10_af7$icd10_af7_d1 == "H" & 
+                               icd10_af7$icd10_af7_d2 >= 0 &
+                               icd10_af7$icd10_af7_d2 <= 59] <- "Bệnh mắt và phần phụ"
+icd10_af7$icd10_af7_d1_names[icd10_af7$icd10_af7_d1 == "H" & 
+                               icd10_af7$icd10_af7_d2 >= 60 &
+                               icd10_af7$icd10_af7_d2 <= 95] <- "Bệnh tai và xương chũm"
+icd10_af7$icd10_af7_d1_names[icd10_af7$icd10_af7_d1 == "I"] <- "Bệnh hệ tuần hoàn"
+icd10_af7$icd10_af7_d1_names[icd10_af7$icd10_af7_d1 == "J"] <- "Bệnh hệ hô hấp"
+icd10_af7$icd10_af7_d1_names[icd10_af7$icd10_af7_d1 == "K"] <- "Bệnh hệ tiêu hoá"
+icd10_af7$icd10_af7_d1_names[icd10_af7$icd10_af7_d1 == "L"] <- "Bệnh da và tổ chức dưới da"
+icd10_af7$icd10_af7_d1_names[icd10_af7$icd10_af7_d1 == "M"] <- "Bệnh hệ cơ, xương, khớp và mô liên kết"
+icd10_af7$icd10_af7_d1_names[icd10_af7$icd10_af7_d1 == "N"] <- "Bệnh hệ sinh dục, tiết niệu"
+icd10_af7$icd10_af7_d1_names[icd10_af7$icd10_af7_d1 == "O"] <- "Mang thai, sinh đẻ và hậu sản"
+icd10_af7$icd10_af7_d1_names[icd10_af7$icd10_af7_d1 == "P"] <- "Một số bệnh lý khởi phát trong thời kỳ chu sinh"
+icd10_af7$icd10_af7_d1_names[icd10_af7$icd10_af7_d1 == "Q"] <- "Dị tật bẩm sinh, biến dạng và bất thường về nhiễm sắc thể"
+icd10_af7$icd10_af7_d1_names[icd10_af7$icd10_af7_d1 == "R"] <- "Các triệu chứng và bất thường về lâm sàng, cận lâm sàng không phân loại nơi khác"
+icd10_af7$icd10_af7_d1_names[icd10_af7$icd10_af7_d1 == "S" |
+                               icd10_af7$icd10_af7_d1 == "T"] <- "Vết thương, ngộ độc và hậu quả của một số nguyên nhân từ bên ngoài"
+icd10_af7$icd10_af7_d1_names[icd10_af7$icd10_af7_d1 == "V" |
+                               icd10_af7$icd10_af7_d1 == "W" |
+                               icd10_af7$icd10_af7_d1 == "X" |
+                               icd10_af7$icd10_af7_d1 == "Y"] <- "Các nguyên nhân từ bên ngoài của bệnh tật và tử vong"
+icd10_af7$icd10_af7_d1_names[icd10_af7$icd10_af7_d1 == "Z"] <- "Các yếu tố liên quan đến tình trạng sức khỏe và tiếp cận dịch vụ y tế"
+icd10_af7$icd10_af7_d1_names[icd10_af7$icd10_af7_d1 == "U"] <- "Mã dành cho những mục đích đặc biệt"
+
+
+dta7<- icd10_af7 %>%
+  mutate(count = 1) %>%
+  group_by(icd10_af7_d1_names) %>%
+  summarise(counts = sum(count)) %>%
+  arrange(desc(counts))
+
+
+##################### Chẩn đoán 8
+icd10_af8<- service1 %>%
+  mutate(dup = duplicated(service_patient_history_id)) %>%
+  filter(dup == FALSE) %>%
+  select(service_patient_history_id, service_patient_identifier, icd10_af8)
+
+icd10_af8$icd10_af8_d1 <- str_sub(icd10_af8$icd10_af8, 1, 1)
+icd10_af8$icd10_af8_d2 <- str_sub(icd10_af8$icd10_af8, 2, 3)
+
+###Tạo biến theo chương mục phân loại bệnh tật ICD10 phân cấp 1 ##### 
+
+icd10_af8$icd10_af8_d1_names[icd10_af8$icd10_af8_d1 == "A" | 
+                               icd10_af8$icd10_af8_d1 == "B"] <- "Bệnh nhiễm trùng và ký sinh trùng"
+icd10_af8$icd10_af8_d1_names[icd10_af8$icd10_af8_d1 == "C"] <- "U tân sinh"
+icd10_af8$icd10_af8_d1_names[icd10_af8$icd10_af8_d1 == "D" & 
+                               icd10_af8$icd10_af8_d2 >= 0 &
+                               icd10_af8$icd10_af8_d2 <= 48] <- "U tân sinh"
+icd10_af8$icd10_af8_d1_names[icd10_af8$icd10_af8_d1 == "D" & 
+                               icd10_af8$icd10_af8_d2 >= 50 &
+                               icd10_af8$icd10_af8_d2 <= 89] <- "Bệnh máu, cơ quan tạo máu và các bệnh lý liên quan đến cơ chế miễn dịch"
+icd10_af8$icd10_af8_d1_names[icd10_af8$icd10_af8_d1 == "E"] <- "Bệnh nội tiết, dinh dưỡng và chuyển hoá"
+icd10_af8$icd10_af8_d1_names[icd10_af8$icd10_af8_d1 == "F"] <- "Rối loạn tâm thần và hành vi"
+icd10_af8$icd10_af8_d1_names[icd10_af8$icd10_af8_d1 == "G"] <- "Bệnh hệ thần kinh"
+icd10_af8$icd10_af8_d1_names[icd10_af8$icd10_af8_d1 == "H" & 
+                               icd10_af8$icd10_af8_d2 >= 0 &
+                               icd10_af8$icd10_af8_d2 <= 59] <- "Bệnh mắt và phần phụ"
+icd10_af8$icd10_af8_d1_names[icd10_af8$icd10_af8_d1 == "H" & 
+                               icd10_af8$icd10_af8_d2 >= 60 &
+                               icd10_af8$icd10_af8_d2 <= 95] <- "Bệnh tai và xương chũm"
+icd10_af8$icd10_af8_d1_names[icd10_af8$icd10_af8_d1 == "I"] <- "Bệnh hệ tuần hoàn"
+icd10_af8$icd10_af8_d1_names[icd10_af8$icd10_af8_d1 == "J"] <- "Bệnh hệ hô hấp"
+icd10_af8$icd10_af8_d1_names[icd10_af8$icd10_af8_d1 == "K"] <- "Bệnh hệ tiêu hoá"
+icd10_af8$icd10_af8_d1_names[icd10_af8$icd10_af8_d1 == "L"] <- "Bệnh da và tổ chức dưới da"
+icd10_af8$icd10_af8_d1_names[icd10_af8$icd10_af8_d1 == "M"] <- "Bệnh hệ cơ, xương, khớp và mô liên kết"
+icd10_af8$icd10_af8_d1_names[icd10_af8$icd10_af8_d1 == "N"] <- "Bệnh hệ sinh dục, tiết niệu"
+icd10_af8$icd10_af8_d1_names[icd10_af8$icd10_af8_d1 == "O"] <- "Mang thai, sinh đẻ và hậu sản"
+icd10_af8$icd10_af8_d1_names[icd10_af8$icd10_af8_d1 == "P"] <- "Một số bệnh lý khởi phát trong thời kỳ chu sinh"
+icd10_af8$icd10_af8_d1_names[icd10_af8$icd10_af8_d1 == "Q"] <- "Dị tật bẩm sinh, biến dạng và bất thường về nhiễm sắc thể"
+icd10_af8$icd10_af8_d1_names[icd10_af8$icd10_af8_d1 == "R"] <- "Các triệu chứng và bất thường về lâm sàng, cận lâm sàng không phân loại nơi khác"
+icd10_af8$icd10_af8_d1_names[icd10_af8$icd10_af8_d1 == "S" |
+                               icd10_af8$icd10_af8_d1 == "T"] <- "Vết thương, ngộ độc và hậu quả của một số nguyên nhân từ bên ngoài"
+icd10_af8$icd10_af8_d1_names[icd10_af8$icd10_af8_d1 == "V" |
+                               icd10_af8$icd10_af8_d1 == "W" |
+                               icd10_af8$icd10_af8_d1 == "X" |
+                               icd10_af8$icd10_af8_d1 == "Y"] <- "Các nguyên nhân từ bên ngoài của bệnh tật và tử vong"
+icd10_af8$icd10_af8_d1_names[icd10_af8$icd10_af8_d1 == "Z"] <- "Các yếu tố liên quan đến tình trạng sức khỏe và tiếp cận dịch vụ y tế"
+icd10_af8$icd10_af8_d1_names[icd10_af8$icd10_af8_d1 == "U"] <- "Mã dành cho những mục đích đặc biệt"
+
+
+dta8<- icd10_af8 %>%
+  mutate(count = 1) %>%
+  group_by(icd10_af8_d1_names) %>%
+  summarise(counts = sum(count)) %>%
+  arrange(desc(counts))
+
+
+colnames(dta)<- c("icd_d1_names", "counts")
+colnames(dta2)<- c("icd_d1_names", "counts2")
+colnames(dta3)<- c("icd_d1_names", "counts3")
+colnames(dta4)<- c("icd_d1_names", "counts4")
+colnames(dta5)<- c("icd_d1_names", "counts5")
+colnames(dta6)<- c("icd_d1_names", "counts6")
+colnames(dta7)<- c("icd_d1_names", "counts7")
+colnames(dta8)<- c("icd_d1_names", "counts8")
+
+
+d1<- full_join(dta, dta2, by = "icd_d1_names")
+d2<- full_join(d1, dta3, by = "icd_d1_names")
+d3<- full_join(d2, dta4, by = "icd_d1_names")
+d4<- full_join(d3, dta5, by = "icd_d1_names")
+d5<- full_join(d4, dta6, by = "icd_d1_names")
+d6<- full_join(d5, dta7, by = "icd_d1_names")
+final<- full_join(d6, dta8, by = "icd_d1_names")
+
+final$counts<- replace_na(final$counts, 0)
+final$counts2<- replace_na(final$counts2, 0)
+final$counts3<- replace_na(final$counts3, 0)
+final$counts4<- replace_na(final$counts4, 0)
+final$counts5<- replace_na(final$counts5, 0)
+final$counts6<- replace_na(final$counts6, 0)
+final$counts7<- replace_na(final$counts7, 0)
+final$counts8<- replace_na(final$counts8, 0)
+
+##
+final$total <- final$counts + final$counts2+final$counts3+final$counts4+final$counts5+final$counts6+ final$counts7 + final$counts8
+
+final <- final %>%
+  arrange(desc(total))
+
+final %>%
+  filter(!is.na(icd_d1_names)) %>%
+  apex(type = "bar", aes(icd_d1_names, total)) %>%
+  ax_labs("Biểu đồ phân tích số lượt thăm khám theo chuẩn đoán bệnh ICD-10")
+```
+
+
+#### **17. Phân tích số lượt khám theo chẩn đoán ICD bậc 2**
+
+#### *17.1. 100 nhóm bệnh được chẩn đoán nhiều nhất*
+```{r, echo=FALSE}
+dta_1 <- icd10_af1 %>%
+  mutate(count = 1) %>%
+  group_by(icd10_af1_d1_names,icd10_af1_d2_names) %>%
+  summarise(counts = sum(count)) %>% 
+  arrange(desc(counts)) %>%
+  head(n=100)
+
+apex(dta_1, type = "bar", aes(icd10_af1_d2_names, counts))
+```
+
+#### *17.2. Nhóm bệnh được chẩn đoán nhiều nhất thuộc loại "Bệnh hệ tiêu hóa"*
+```{r, echo=FALSE}
+dta_g1 <- dta_1 %>%
+  filter(icd10_af1_d1_names == "Bệnh hệ tiêu hoá") %>%
+  arrange(desc(counts))
+
+apex(dta_g1, type = "bar", aes(icd10_af1_d2_names, counts))
+##################
+```
+
+#### *17.3. Nhóm bệnh được chẩn đoán nhiều nhất thuộc loại "Các yếu tố liên quan đến tình trạng sức khỏe và tiếp cận dịch vụ y tế"*
+```{r, echo=FALSE}
+dta_g2 <- dta_1 %>%
+  filter(icd10_af1_d1_names == "Các yếu tố liên quan đến tình trạng sức khỏe và tiếp cận dịch vụ y tế") %>%
+  arrange(desc(counts))
+
+apex(dta_g2, type = "bar", aes(icd10_af1_d2_names, counts))
+######################
+```
+
+
+#### *17.4. Nhóm bệnh được chẩn đoán nhiều nhất thuộc loại "Bệnh hệ hô hấp"*
+```{r, echo=FALSE}
+dta_g3 <- dta_1 %>%
+  filter(icd10_af1_d1_names == "Bệnh hệ hô hấp") %>%
+  arrange(desc(counts))
+
+apex(dta_g3, type = "bar", aes(icd10_af1_d2_names, counts))
+######################
+```
+
+
+#### *17.5. Nhóm bệnh được chẩn đoán nhiều nhất thuộc loại "Bệnh hệ cơ, xương, khớp và mô liên kết"*
+```{r, echo=FALSE}
+dta_g4 <- dta_1 %>%
+  filter(icd10_af1_d1_names == "Bệnh hệ cơ, xương, khớp và mô liên kết") %>%
+  arrange(desc(counts))
+
+apex(dta_g4, type = "bar", aes(icd10_af1_d2_names, counts))
+######################
+```
+
+#### *17.6. Nhóm bệnh được chẩn đoán nhiều nhất thuộc loại "Bệnh hệ sinh dục, tiết niệu"*
+```{r, echo=FALSE}
+dta_g5 <- dta_1 %>%
+  filter(icd10_af1_d1_names == "Bệnh hệ sinh dục, tiết niệu") %>%
+  arrange(desc(counts))
+
+apex(dta_g5, type = "bar", aes(icd10_af1_d2_names, counts))
+######################
+```
+
+
+#### *17.7. Nhóm bệnh được chẩn đoán nhiều nhất thuộc loại "Các triệu chứng và bất thường về lâm sàng, cận lâm sàng không phân loại nơi khác"*
+```{r, echo=FALSE}
+dta_g6 <- dta_1 %>%
+  filter(icd10_af1_d1_names == "Các triệu chứng và bất thường về lâm sàng, cận lâm sàng không phân loại nơi khác") %>%
+  arrange(desc(counts))
+
+apex(dta_g6, type = "bar", aes(icd10_af1_d2_names, counts))
+######################
+```
+
+
+#### *17.8. Nhóm bệnh được chẩn đoán nhiều nhất thuộc loại "Bệnh nội tiết, dinh dưỡng và chuyển hoá"*
+```{r, echo=FALSE}
+dta_g7 <- dta_1 %>%
+  filter(icd10_af1_d1_names == "Bệnh nội tiết, dinh dưỡng và chuyển hoá") %>%
+  arrange(desc(counts))
+
+apex(dta_g7, type = "bar", aes(icd10_af1_d2_names, counts))
+######################
+```
+
+
+#### *17.9. Nhóm bệnh được chẩn đoán nhiều nhất thuộc loại "U tân sinh"*
+```{r, echo=FALSE}
+dta_g8 <- dta_1 %>%
+  filter(icd10_af1_d1_names == "U tân sinh") %>%
+  arrange(desc(counts))
+
+apex(dta_g8, type = "bar", aes(icd10_af1_d2_names, counts))
+#############
+```
+
+
+#### *17.10. Nhóm bệnh được chẩn đoán nhiều nhất thuộc loại "Bệnh hệ tuần hoàn"*
+```{r, echo=FALSE}
+dta_g9 <- dta_1 %>%
+  filter(icd10_af1_d1_names == "Bệnh hệ tuần hoàn") %>%
+  arrange(desc(counts))
+
+apex(dta_g9, type = "bar", aes(icd10_af1_d2_names, counts))
+#############
+```
+
+
+#### *17.11. Nhóm bệnh được chẩn đoán nhiều nhất thuộc loại "Bệnh hệ thần kinh"*
+```{r, echo=FALSE}
+dta_g10 <- dta_1 %>%
+  filter(icd10_af1_d1_names == "Bệnh hệ thần kinh") %>%
+  arrange(desc(counts))
+
+apex(dta_g10, type = "bar", aes(icd10_af1_d2_names, counts))
+```
+
+
+#### **18. Phân tích số lượt khám theo chẩn đoán ICD bậc 3**
+
+#### *18.1. Nhóm bệnh được chẩn đoán nhiều nhất thuộc loại "Bệnh hệ tiêu hóa"*
+```{r, echo=FALSE}
+dta_2 <- icd10_af1 %>%
+  mutate(count = 1) %>%
+  group_by(icd10_af1_d1_names,icd10_af1_d3_names) %>%
+  summarise(counts = sum(count)) %>% 
+  arrange(desc(counts)) %>%
+  head(n=100)
+
+dta_g1 <- dta_2 %>%
+  filter(icd10_af1_d1_names == "Bệnh hệ tiêu hoá") %>%
+  arrange(desc(counts))
+
+apex(dta_g1, type = "bar", aes(icd10_af1_d3_names, counts))
+```
+
+#### *18.2. Nhóm bệnh được chẩn đoán nhiều nhất thuộc loại "Các yếu tố liên quan đến tình trạng sức khỏe và tiếp cận dịch vụ y tế"*
+```{r, echo=FALSE}
+##################
+
+dta_g2 <- dta_2 %>%
+  filter(icd10_af1_d1_names == "Các yếu tố liên quan đến tình trạng sức khỏe và tiếp cận dịch vụ y tế") %>%
+  arrange(desc(counts))
+
+apex(dta_g2, type = "bar", aes(icd10_af1_d3_names, counts))
+```
+
+#### *18.3. Nhóm bệnh được chẩn đoán nhiều nhất thuộc loại "Bệnh hệ hô hấp"*
+```{r, echo=FALSE}
+######################
+dta_g3 <- dta_2 %>%
+  filter(icd10_af1_d1_names == "Bệnh hệ hô hấp") %>%
+  arrange(desc(counts))
+
+apex(dta_g3, type = "bar", aes(icd10_af1_d3_names, counts))
+```
+
+#### *18.4. Nhóm bệnh được chẩn đoán nhiều nhất thuộc loại "Bệnh hệ cơ, xương, khớp và mô liên kết"*
+```{r, echo=FALSE}
+######################
+dta_g4 <- dta_2 %>%
+  filter(icd10_af1_d1_names == "Bệnh hệ cơ, xương, khớp và mô liên kết") %>%
+  arrange(desc(counts))
+
+apex(dta_g4, type = "bar", aes(icd10_af1_d3_names, counts))
+```
+
+#### *18.5. Nhóm bệnh được chẩn đoán nhiều nhất thuộc loại "Bệnh hệ sinh dục, tiết niệu"*
+```{r, echo=FALSE}
+######################
+dta_g5 <- dta_2 %>%
+  filter(icd10_af1_d1_names == "Bệnh hệ sinh dục, tiết niệu") %>%
+  arrange(desc(counts))
+
+apex(dta_g5, type = "bar", aes(icd10_af1_d3_names, counts))
+```
+
+#### *18.6. Nhóm bệnh được chẩn đoán nhiều nhất thuộc loại "Các triệu chứng và bất thường về lâm sàng, cận lâm sàng không phân loại nơi khác"*
+```{r, echo=FALSE}
+######################
+dta_g6 <- dta_2 %>%
+  filter(icd10_af1_d1_names == "Các triệu chứng và bất thường về lâm sàng, cận lâm sàng không phân loại nơi khác") %>%
+  arrange(desc(counts))
+
+apex(dta_g6, type = "bar", aes(icd10_af1_d3_names, counts))
+```
+
+
+#### *18.7. Nhóm bệnh được chẩn đoán nhiều nhất thuộc loại "Bệnh nội tiết, dinh dưỡng và chuyển hoá"*
+```{r, echo=FALSE}
+######################
+dta_g7 <- dta_2 %>%
+  filter(icd10_af1_d1_names == "Bệnh nội tiết, dinh dưỡng và chuyển hoá") %>%
+  arrange(desc(counts))
+
+apex(dta_g7, type = "bar", aes(icd10_af1_d3_names, counts))
+```
+
+#### *18.8. Nhóm bệnh được chẩn đoán nhiều nhất thuộc loại "U tân sinh"*
+```{r, echo=FALSE}
+######################
+dta_g8 <- dta_2 %>%
+  filter(icd10_af1_d1_names == "U tân sinh") %>%
+  arrange(desc(counts))
+
+apex(dta_g8, type = "bar", aes(icd10_af1_d3_names, counts))
+```
+
+#### *18.9. Nhóm bệnh được chẩn đoán nhiều nhất thuộc loại "Bệnh hệ tuần hoàn"*
+```{r, echo=FALSE}
+#############
+dta_g9 <- dta_2 %>%
+  filter(icd10_af1_d1_names == "Bệnh hệ tuần hoàn") %>%
+  arrange(desc(counts))
+
+apex(dta_g9, type = "bar", aes(icd10_af1_d3_names, counts))
+```
+
+
+#### *18.10. Nhóm bệnh được chẩn đoán nhiều nhất thuộc loại "Bệnh hệ thần kinh"*
+```{r, echo=FALSE}
+#############
+dta_g10 <- dta_2 %>%
+  filter(icd10_af1_d1_names == "Bệnh hệ thần kinh") %>%
+  arrange(desc(counts))
+
+apex(dta_g10, type = "bar", aes(icd10_af1_d3_names, counts))
+```
+
